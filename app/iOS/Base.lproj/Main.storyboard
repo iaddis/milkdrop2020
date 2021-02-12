@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="16096" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" colorMatched="YES" initialViewController="y81-kX-g6g">
+    <device id="retina5_9" orientation="landscape" appearance="light"/>
+    <dependencies>
+        <deployment identifier="iOS"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="16087"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <scenes>
+        <!--RenderViewController-->
+        <scene sceneID="szA-jt-0hb">
+            <objects>
+                <viewController storyboardIdentifier="MetalScene" autoresizesArchivedViewToFullSize="NO" id="y81-kX-g6g" userLabel="RenderViewController" customClass="RenderViewControllerIOS" sceneMemberID="viewController">
+                    <layoutGuides>
+                        <viewControllerLayoutGuide type="top" id="pA0-Yd-tj8"/>
+                        <viewControllerLayoutGuide type="bottom" id="U3M-fs-sr0"/>
+                    </layoutGuides>
+                    <view key="view" contentMode="scaleToFill" id="l5O-Uj-x1Z">
+                        <rect key="frame" x="0.0" y="0.0" width="812" height="375"/>
+                        <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                        <color key="backgroundColor" systemColor="systemBackgroundColor" cocoaTouchSystemColor="whiteColor"/>
+                    </view>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="uTy-dQ-Mk5" userLabel="First Responder" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="525" y="1006"/>
+        </scene>
+        <!--External View Controller-->
+        <scene sceneID="ySA-v2-aQy">
+            <objects>
+                <viewController storyboardIdentifier="ExternalWindowScene" id="KoZ-0z-vSQ" customClass="ExternalViewController" sceneMemberID="viewController">
+                    <layoutGuides>
+                        <viewControllerLayoutGuide type="top" id="NAn-dL-Ypl"/>
+                        <viewControllerLayoutGuide type="bottom" id="fhD-JS-nfJ"/>
+                    </layoutGuides>
+                    <view key="view" contentMode="scaleToFill" id="od8-et-eFa">
+                        <rect key="frame" x="0.0" y="0.0" width="812" height="375"/>
+                        <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                        <color key="backgroundColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                    </view>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="pfH-45-cbp" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="502" y="-620"/>
+        </scene>
+    </scenes>
+</document>

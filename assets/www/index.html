@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<!--
+Copyright (c) 2014 The Chromium Authors. All rights reserved.
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
+-->
+<head>
+<script>
+'use strict';
+
+function onTraceViewerImportFail() {
+  document.addEventListener('DOMContentLoaded', function() {
+    document.body.textContent =
+        'tracing/bin/trace_viewer_full.html is missing. ' +
+        'Run vulcanize_trace_viewer from $TRACE_VIEWER and reload.';
+  });
+}
+</script>
+<link rel="import" href="trace_viewer_full.html"
+      onerror="onTraceViewerImportFail(event)">
+
+<style>
+  html, body {
+    box-sizing: border-box;
+    overflow: hidden;
+    margin: 0px;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+  }
+  #trace-viewer {
+    width: 100%;
+    height: 100%;
+  }
+  #trace-viewer:focus {
+    outline: none;
+  }
+</style>
+
+<script language="javascript" src="jquery-3.4.1.js"></script>
+<script language="javascript" src="index.js"></script>
+</head>
+<body>
+  <tr-ui-timeline-view>
+    <track-view-container id='track_view_container'></track-view-container>
+  </tr-ui-timeline-view>
+
+
+</body>
+</html>
