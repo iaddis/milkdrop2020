@@ -32,11 +32,10 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "pluginshell.h"
 #include "md_defines.h"
-#include "menu.h"
 #include "support.h"
 #include "texmgr.h"
 #include "state.h"
-#include "../nu/Vector.h"
+#include "Vector.h"
 
 #include "gstring.h"
 #include "../ns-eel2/ns-eel.h"
@@ -98,70 +97,6 @@ enum
 	MD2_PS_3_0 = 4,
 	MD2_PS_4_0 = 5, // not supported by milkdrop
 };
-/*
-typedef struct
-{
-    char szFace[256];
-    int nSize;
-    int bBold;
-    int bItalic;
-} td_titlefontinfo;*/
-
-typedef struct
-{
-	int		nFont;
-	float	fSize;	// 0..100
-	float	x;
-	float	y;
-	float	randx;
-	float   randy;
-	float	growth;
-	float	fTime;	// total time to display the message, in seconds
-	float	fFade;	// % (0..1) of the time that is spent fading in
-	
-	// overrides
-	int     bOverrideBold;
-	int     bOverrideItal;
-	int     bOverrideFace;
-	int     bOverrideColorR;
-	int     bOverrideColorG;
-	int     bOverrideColorB;
-	int		nColorR;    // 0..255
-	int		nColorG;    // 0..255
-	int		nColorB;    // 0..255
-	int  	nRandR;
-	int     nRandG;
-	int  	nRandB;
-	int     bBold;
-	int     bItal;
-	wchar_t szFace[128];
-
-	wchar_t	szText[256];
-} 
-td_custom_msg;
-
-typedef struct
-{
-	int 	bRedrawSuperText;	// true if it needs redraw
-	int 	bIsSongTitle;		// false for custom message, true for song title
-	//char	szText[256];
-	wchar_t	szTextW[256];
-	wchar_t	nFontFace[128];
-	int 	bBold;
-	int 	bItal;
-	float	fX;
-	float   fY;
-	float	fFontSize;			// [0..100] for custom messages, [0..4] for song titles
-	float   fGrowth;			// applies to custom messages only
-	int		nFontSizeUsed;		// height IN PIXELS
-	float	fStartTime;
-	float	fDuration;
-	float	fFadeTime;			// applies to custom messages only; song title fade times are handled specially
-	int  	nColorR;
-	int     nColorG;
-	int  	nColorB;
-}
-td_supertext;
 
 typedef struct
 {
@@ -323,9 +258,6 @@ public:
         int			m_nGridX;
         int			m_nGridY;
 
-        bool		m_bShowPressF1ForHelp;
-        //char		m_szMonitorName[256];
-        bool		m_bShowMenuToolTips;
         int			m_n16BitGamma;
         bool		m_bAutoGamma;
         //int		m_nFpsLimit;
@@ -333,12 +265,6 @@ public:
         //int			m_cRightEye3DColor[3];
         bool		m_bEnableRating;
         //bool        m_bInstaScan;
-        bool		m_bSongTitleAnims;
-        float		m_fSongTitleAnimDuration;
-        float		m_fTimeBetweenRandomSongTitles;
-        float		m_fTimeBetweenRandomCustomMsgs;
-        int			m_nSongTitlesSpawned;
-        int			m_nCustMsgsSpawned;
 
         //bool		m_bAlways3D;
         //float       m_fStereoSep;
@@ -347,26 +273,11 @@ public:
         //bool		m_bWarningsDisabled;		// messageboxes
         bool		m_bWarningsDisabled2;		// warnings/errors in upper-right corner (m_szUserMessage)
         //bool        m_bAnisotropicFiltering;
-        bool        m_bPresetLockOnAtStartup;
-		bool		m_bPreventScollLockHandling;
         int         m_nMaxPSVersion_ConfigPanel;  // -1 = auto, 0 = disable shaders, 2 = ps_2_0, 3 = ps_3_0
         int         m_nMaxPSVersion_DX9;          // 0 = no shader support, 2 = ps_2_0, 3 = ps_3_0
         int         m_nMaxPSVersion;              // this one will be the ~min of the other two.  0/2/3.
         int         m_nMaxImages;
         int         m_nMaxBytes;
-
-        /*
-        char		m_szFontFace[NUM_FONTS][128];
-        int			m_nFontSize[NUM_FONTS];
-        bool		m_bFontBold[NUM_FONTS];
-        bool		m_bFontItalic[NUM_FONTS];
-        char		 m_szTitleFontFace[128];
-        int			 m_nTitleFontSize;			// percentage of screen width (0..100)
-        bool		 m_bTitleFontBold;
-        bool		 m_bTitleFontItalic;
-        */
-        HFONT       m_gdi_title_font_doublesize;
-        LPD3DXFONT  m_d3dx_title_font_doublesize;
 
         // PIXEL SHADERS
         DWORD                   m_dwShaderFlags;       // Shader compilation/linking flags
@@ -430,28 +341,8 @@ public:
         int         m_nMashPreset[MASH_SLOTS];
         int         m_nLastMashChangeFrame[MASH_SLOTS];
 
-        //td_playlist_entry *m_szPlaylist;	// array of 128-char strings
-        //int		m_nPlaylistCurPos;
-        //int		m_nPlaylistLength;
-        //int		m_nTrackPlaying;
-        //int		m_nSongPosMS;
-        //int		m_nSongLenMS;
-        bool		m_bUserPagedUp;
-        bool		m_bUserPagedDown;
         float		m_fMotionVectorsTempDx;
         float		m_fMotionVectorsTempDy;
-
-        td_waitstr  m_waitstring;
-        void		WaitString_NukeSelection();
-        void		WaitString_Cut();
-        void		WaitString_Copy();
-        void		WaitString_Paste();
-        void		WaitString_SeekLeftWord();
-        void		WaitString_SeekRightWord();
-        int			WaitString_GetCursorColumn();
-        int			WaitString_GetLineLength();
-        void		WaitString_SeekUpOneLine();
-        void		WaitString_SeekDownOneLine();
 
         int			m_nPresets;			// the # of entries in the file listing.  Includes directories and then files, sorted alphabetically.
         int			m_nDirs;			// the # of presets that are actually directories.  Always between 0 and m_nPresets.
@@ -461,11 +352,7 @@ public:
 								        //   Be careful - this can be -1 if the user changed dir. & a new preset hasn't been loaded yet.
         wchar_t		m_szCurrentPresetFile[512];	// w/o path.  this is always valid (unless no presets were found)
         PresetList  m_presets;
-	    void		UpdatePresetList(bool bBackground=false, bool bForce=false, bool bTryReselectCurrentPreset=true);
-        wchar_t     m_szUpdatePresetMask[MAX_PATH];
-        bool        m_bPresetListReady;
-	    //void		UpdatePresetRatings();
-        //int         m_nRatingReadProgress;  // equals 'm_nPresets' if all ratings are read in & ready to go; -1 if uninitialized; otherwise, it's still reading them in, and range is: [0 .. m_nPresets-1]
+		void		LoadPresetList();
         bool        m_bInitialPresetSelected;
 
         // PRESET HISTORY
@@ -481,21 +368,6 @@ public:
         FFT            myfft;
         td_mysounddata mysound;
         
-        // stuff for displaying text to user:
-        //int			m_nTextHeightPixels;	// this is for the menu/detail font; NOT the "fancy font"
-        //int			m_nTextHeightPixels_Fancy;
-        bool		m_bShowFPS;
-        bool		m_bShowRating;
-        bool		m_bShowPresetInfo;
-        bool		m_bShowDebugInfo;
-        bool		m_bShowSongTitle;
-        bool		m_bShowSongTime;
-        bool		m_bShowSongLen;
-        float		m_fShowRatingUntilThisTime;
-        //float		m_fShowUserMessageUntilThisTime;
-        //char		m_szUserMessage[512];
-         //bool        m_bUserMessageIsError;
-        
         #define ERR_ALL    0
         #define ERR_INIT   1  //specifically, loading a preset
         #define ERR_PRESET 2  //specifically, loading a preset
@@ -507,27 +379,6 @@ public:
         void        AddError(wchar_t* szMsg, float fDuration, int category=ERR_ALL, bool bBold=true);
         void        ClearErrors(int category=ERR_ALL);  // 0=all categories
         
-        char		m_szDebugMessage[512];
-        wchar_t		m_szSongTitle    [512];
-        wchar_t		m_szSongTitlePrev[512];
-        //HFONT		m_hfont[3];	// 0=fancy font (for song titles, preset name)
-						        // 1=legible font (the main font)
-						        // 2=tooltip font (for tooltips in the menu system)
-        //HFONT       m_htitlefont[NUM_TITLE_FONTS]; // ~25 different sizes
-        // stuff for menu system:
-        CMilkMenu	*m_pCurMenu;	// should always be valid!
-        CMilkMenu	 m_menuPreset;
-        CMilkMenu	  m_menuWave;
-        CMilkMenu	  m_menuAugment;
-        CMilkMenu	  m_menuCustomWave;
-        CMilkMenu	  m_menuCustomShape;
-        CMilkMenu	  m_menuMotion;
-        CMilkMenu	  m_menuPost;
-        CMilkMenu    m_menuWavecode[MAX_CUSTOM_WAVES];
-        CMilkMenu    m_menuShapecode[MAX_CUSTOM_SHAPES];
-        bool         m_bShowShaderHelp;
-
-
 
         wchar_t		m_szMilkdrop2Path[MAX_PATH];		// ends in a backslash
         wchar_t		m_szMsgIniFile[MAX_PATH];
@@ -544,8 +395,6 @@ public:
         int               m_nBlurTexH[NUM_BLUR_TEX];
         #endif
         int m_nHighestBlurTexUsedThisFrame;
-        IDirect3DTexture9 *m_lpDDSTitle;    // CAREFUL: MIGHT BE NULL (if not enough mem)!
-        int               m_nTitleTexSizeX, m_nTitleTexSizeY;
         MYVERTEX          *m_verts;
         MYVERTEX          *m_verts_temp;
         td_vertinfo       *m_vertinfo;
@@ -562,20 +411,9 @@ public:
 
         bool		m_bMMX;
         //bool		m_bSSE;
-        bool        m_bHasFocus;
-        bool        m_bHadFocus;
-        bool		m_bOrigScrollLockState;
-        //bool      m_bMilkdropScrollLockState;  // saved when focus is lost; restored when focus is regained
-
-        int         m_nNumericInputMode;	// NUMERIC_INPUT_MODE_CUST_MSG, NUMERIC_INPUT_MODE_SPRITE
-        int         m_nNumericInputNum;
-        int			m_nNumericInputDigits;
-        td_custom_msg_font   m_CustomMessageFont[MAX_CUSTOM_MESSAGE_FONTS];
-        td_custom_msg        m_CustomMessage[MAX_CUSTOM_MESSAGES];
 
         texmgr      m_texmgr;		// for user sprites
 
-        td_supertext m_supertext;	// **contains info about current Song Title or Custom Message.**
 
         IDirect3DTexture9 *m_tracer_tex;
 
@@ -597,11 +435,9 @@ public:
 
    //====[ 2. methods added: ]=====================================================================================
         
-        void RefreshTab2(HWND hwnd);
         void RenderFrame(int bRedraw);
         void AlignWave(int nSamples);
 
-        void        DrawTooltip(wchar_t* str, int xR, int yB);
         void        RandomizeBlendPattern();
         void        GenPlasma(int x0, int x1, int y0, int y1, float dt);
         void        LoadPerFrameEvallibVars(CState* pState);
@@ -614,8 +450,6 @@ public:
 	    void		LoadPreset(const wchar_t *szPresetFilename, float fBlendTime);
         void        LoadPresetTick();
         void        FindValidPresetDir();
-	    //char*		GetConfigIniFile() { return m_szConfigIniFile; };
-	    wchar_t*	GetMsgIniFile()    { return m_szMsgIniFile; };
 	    wchar_t*    GetPresetDir()     { return m_szPresetDir; };
 	    void		SavePresetAs(wchar_t *szNewFile);		// overwrites the file if it was already there.
 	    void		DeletePresetFile(wchar_t *szDelFile);	
@@ -625,20 +459,8 @@ public:
 	    bool		ReversePropagatePoint(float fx, float fy, float *fx2, float *fy2);
 	    int 		HandleRegularKey(WPARAM wParam);
 	    bool		OnResizeGraphicsWindow();
-	    bool		OnResizeTextWindow();
-	    //bool		InitFont();
-	    //void		ToggleControlWindow();	// for Desktop Mode only
-	    //void		DrawUI();
-	    void		ClearGraphicsWindow();	// for windowed mode only
-        //bool    Update_Overlay();
-	    //void		UpdatePlaylist();
-	    void		LaunchCustomMessage(int nMsgNum);
-	    void		ReadCustomMessages();
-	    void		LaunchSongTitleAnim();
 
-	    bool		RenderStringToTitleTexture();
-	    void		ShowSongTitleAnim(/*IDirect3DTexture9* lpRenderTarget,*/ int w, int h, float fProgress);
-	    void		DrawWave(float *fL, float *fR);
+		void		DrawWave(float *fL, float *fR);
         void        DrawCustomWaves();
         void        DrawCustomShapes();
 	    void		DrawSprites();
@@ -654,8 +476,6 @@ public:
 	    void		RunPerFrameEquations(int code);
 	    void		DrawUserSprites();
 	    void		MergeSortPresets(int left, int right);
-	    void		BuildMenus();
-        void        SetMenusForPresetVersion(int WarpPSVersion, int CompPSVersion);
 	    //void  ResetWindowSizeOnDisk();
 	    bool		LaunchSprite(int nSpriteNum, int nSlot);
 	    void		KillSprite(int iSlot);
@@ -681,10 +501,7 @@ public:
         virtual int  AllocateMyDX9Stuff();
         virtual void  CleanUpMyDX9Stuff(int final_cleanup);
         virtual void MyRenderFn(int redraw);
-        virtual void MyRenderUI(int *upper_left_corner_y, int *upper_right_corner_y, int *lower_left_corner_y, int *lower_right_corner_y, int xL, int xR);
         virtual LRESULT MyWindowProc(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lParam);
-        virtual BOOL    MyConfigTabProc(int nPage, HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam);
-        virtual void OnAltK();
 
         //====[ 4. methods from base class: ]===========================================================================
     /*

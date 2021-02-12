@@ -34,31 +34,9 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define DEFAULT_FULLSCREEN_WIDTH  640
 #define DEFAULT_FULLSCREEN_HEIGHT 480
-#define MAX_ICON_TEXTURES 8
-#define ICON_TEXTURE_SIZE 256
 #define DEFAULT_WINDOW_SIZE 0.625f      // as a portion of the width or height of the screen (whichever is smaller)
 #define DESKTOP_MODE_KEYBOARD_INPUT_WINDOW_CLASSNAME "DESKTOP MODE KEYBOARD INPUT WINDOW"
 #define BGR2RGB(x) (((x>>16)&0xFF) | (x & 0xFF00) | ((x<<16)&0xFF0000))
-
-#define NUM_BASIC_FONTS 4 
-#define  SYS_FONT 0
-#define  DEC_FONT 1
-#define  HELP_FONT 2
-#define  DESK_FONT 3
-#define MAX_EXTRA_FONTS 5
-typedef enum
-{
-    SIMPLE_FONT = 0,  // aka 'system' font; should be legible
-    DECORATIVE_FONT = 1,
-    HELPSCREEN_FONT = 2,
-    PLAYLIST_FONT = 3,
-    EXTRA_1 = 4, 
-    EXTRA_2 = 5,
-    EXTRA_3 = 6,
-    EXTRA_4 = 7,
-    EXTRA_5 = 8
-} 
-eFontIndex;
 
 // for m_screenmode:
 typedef enum
@@ -66,11 +44,10 @@ typedef enum
     NOT_YET_KNOWN   = -1,
     FULLSCREEN      =  0,
     WINDOWED        =  1,
-    FAKE_FULLSCREEN =  2,
-    DESKTOP         =  3       // doesn't use overlays! =)
+    FAKE_FULLSCREEN =  2
 } 
 eScrMode;
 
-#include "../Winamp/wa_ipc.h"
+#include "wa_ipc.h"
 
 #endif

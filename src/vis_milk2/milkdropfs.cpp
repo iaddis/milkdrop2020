@@ -27,34 +27,14 @@ IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISI
 OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "api.h"
 #include "plugin.h"
-#include "resource.h"
 #include "support.h"
-//#include "evallib\eval.h"		// for math. expr. eval - thanks Francis! (in SourceOffSite, it's the 'vis_avs\evallib' project.)
-//#include "evallib\compiler.h"
-#include "../ns-eel2/ns-eel.h"
 #include "utility.h"
 #include <assert.h>
 #include <math.h>
 
 #define D3DCOLOR_RGBA_01(r,g,b,a) D3DCOLOR_RGBA(((int)(r*255)),((int)(g*255)),((int)(b*255)),((int)(a*255)))
 #define FRAND ((warand() % 7381)/7380.0f)
-
-#define VERT_CLIP 0.75f		// warning: top/bottom can get clipped if you go < 0.65!
-
-int g_title_font_sizes[] =  
-{ 
-    // NOTE: DO NOT EXCEED 64 FONTS HERE.
-	6,  8,  10, 12, 14, 16,      
-	20, 26, 32, 38, 44, 50, 56,
-	64, 72, 80, 88, 96, 104, 112, 120, 128, 136, 144, 
-	160, 192, 224, 256, 288, 320, 352, 384, 416, 448, 
-	480, 512	/**/
-};	
-
-//#define COMPILE_MULTIMON_STUBS 1
-//#include <multimon.h>
 
 // This function evaluates whether the floating-point
 // control Word is set to single precision/round to nearest/
@@ -160,303 +140,6 @@ int GetNumToSpawn(float fTime, float fDeltaT, float fRate, float fRegularity, in
     return (int)(fNumToSpawn + 0.49f);
 }
 
-bool CPlugin::OnResizeTextWindow()
-{
-	/*
-    if (!m_hTextWnd)
-		return false;
-
-	RECT rect;
-	GetClientRect(m_hTextWnd, &rect);
-
-	if (rect.right - rect.left != m_nTextWndWidth ||
-		rect.bottom - rect.top != m_nTextWndHeight)
-	{
-		m_nTextWndWidth = rect.right - rect.left;
-		m_nTextWndHeight = rect.bottom - rect.top;
-
-		// first, resize fonts if necessary
-		//if (!InitFont())
-			//return false;
-
-		// then resize the memory bitmap used for double buffering
-		if (m_memDC)
-		{
-			SelectObject(m_memDC, m_oldBM);	// delete our doublebuffer
-			DeleteObject(m_memDC);
-			DeleteObject(m_memBM);	
-			m_memDC = NULL;
-			m_memBM = NULL;
-			m_oldBM = NULL;
-		}
-		
-		HDC hdc = GetDC(m_hTextWnd);
-		if (!hdc) return false;
-
-		m_memDC = CreateCompatibleDC(hdc);
-		m_memBM = CreateCompatibleBitmap(hdc, rect.right - rect.left, rect.bottom - rect.top);
-		m_oldBM = (HBITMAP)SelectObject(m_memDC,m_memBM);
-		
-		ReleaseDC(m_hTextWnd, hdc);
-
-		// save new window pos
-		WriteRealtimeConfig();
-	}*/
-
-	return true;
-}
-
-
-void CPlugin::ClearGraphicsWindow()
-{
-	// clear the window contents, to avoid a 1-pixel-thick border of noise that sometimes sticks around
-    /*
-	RECT rect;
-	GetClientRect(GetPluginWindow(), &rect);
-
-	HDC hdc = GetDC(GetPluginWindow());
-	FillRect(hdc, &rect, m_hBlackBrush);
-	ReleaseDC(GetPluginWindow(), hdc);
-    */
-}
-
-/*
-bool CPlugin::OnResizeGraphicsWindow()
-{
-    // NO LONGER NEEDED, SINCE PLUGIN SHELL CREATES A NEW DIRECTX
-    // OBJECT WHENEVER WINDOW IS RESIZED.
-}
-*/
-
-bool CPlugin::RenderStringToTitleTexture()	// m_szSongMessage
-{
-    if (!m_lpDDSTitle)  // this *can* be NULL, if not much video mem!
-        return false;
-
-	if (m_supertext.szTextW[0]==0)
-		return false;
-
-    LPDIRECT3DDEVICE9 lpDevice = GetDevice();
-    if (!lpDevice)
-        return false;
-
-	wchar_t szTextToDraw[512];
-	swprintf(szTextToDraw, L" %s ", m_supertext.szTextW);  //add a space @ end for italicized fonts; and at start, too, because it's centered!
-	
-    // Remember the original backbuffer and zbuffer
-    LPDIRECT3DSURFACE9 pBackBuffer=NULL;//, pZBuffer=NULL;
-    lpDevice->GetRenderTarget( 0, &pBackBuffer );
-    //lpDevice->GetDepthStencilSurface( &pZBuffer );
-
-    // set render target to m_lpDDSTitle
-    {
-	    lpDevice->SetTexture(0, NULL);
-
-        IDirect3DSurface9* pNewTarget = NULL;
-        if (m_lpDDSTitle->GetSurfaceLevel(0, &pNewTarget) != D3D_OK) 
-        {
-            SafeRelease(pBackBuffer);
-            //SafeRelease(pZBuffer);
-            return false;
-        }
-        lpDevice->SetRenderTarget(0, pNewTarget);
-         //lpDevice->SetDepthStencilSurface( NULL );
-        pNewTarget->Release();
-
-	    lpDevice->SetTexture(0, NULL);
-    }
-
-	// clear the texture to black
-    {
-        lpDevice->SetVertexShader( NULL );
-        lpDevice->SetFVF( WFVERTEX_FORMAT );
-        lpDevice->SetTexture(0, NULL);
-
-        lpDevice->SetRenderState( D3DRS_ALPHABLENDENABLE, FALSE );
-
-        // set up a quad
-        WFVERTEX verts[4];
-        for (int i=0; i<4; i++)
-        {
-            verts[i].x = (i%2==0) ? -1.f : 1.f;
-            verts[i].y = (i/2==0) ? -1.f : 1.f;
-            verts[i].z = 0;
-            verts[i].Diffuse = 0xFF000000;
-        }
-
-        lpDevice->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, verts, sizeof(WFVERTEX));
-    }
-
-    /*// 1. clip title if too many chars
-	if (m_supertext.bIsSongTitle)
-	{
-		// truncate song title if too long; don't clip custom messages, though!
-		int clip_chars = 32;
-        int user_title_size = GetFontHeight(SONGTITLE_FONT);
-
-        #define MIN_CHARS 8         // max clip_chars *for BIG FONTS*
-        #define MAX_CHARS 64        // max clip chars *for tiny fonts*
-        float t = (user_title_size-10)/(float)(128-10);
-        t = min(1,max(0,t));
-        clip_chars = (int)(MAX_CHARS - (MAX_CHARS-MIN_CHARS)*t);
-
-		if ((int)strlen(szTextToDraw) > clip_chars+3)
-			lstrcpy(&szTextToDraw[clip_chars], "...");
-	}*/
-
-    bool ret = true;
-
-	// use 2 lines; must leave room for bottom of 'g' characters and such!
-	RECT rect;
-	rect.left   = 0;
-	rect.right  = m_nTitleTexSizeX;
-	rect.top    = m_nTitleTexSizeY* 1/21;  // otherwise, top of '%' could be cut off (1/21 seems safe)
-	rect.bottom = m_nTitleTexSizeY*17/21;  // otherwise, bottom of 'g' could be cut off (18/21 seems safe, but we want some leeway)
-
-    if (!m_supertext.bIsSongTitle)
-    {
-        // custom msg -> pick font to use that will best fill the texture
-
-        HFONT gdi_font = NULL;
-        LPD3DXFONT d3dx_font = NULL;
-
-        int lo = 0;
-	    int hi = sizeof(g_title_font_sizes)/sizeof(int) - 1;
-    
-        // limit the size of the font used:
-
-        //int user_title_size = GetFontHeight(SONGTITLE_FONT);
-        //while (g_title_font_sizes[hi] > user_title_size*2 && hi>4)
-        //    hi--;
-
-        RECT temp;
-	    while (1)//(lo < hi-1)
-	    {
-		    int mid = (lo+hi)/2;
-
-		    // create new gdi font at 'mid' size:
-            gdi_font = CreateFontW( g_title_font_sizes[mid], 0, 0, 0, m_supertext.bBold ? 900 : 400, m_supertext.bItal, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, 
-				                    m_fontinfo[SONGTITLE_FONT].bAntiAliased ? ANTIALIASED_QUALITY : DEFAULT_QUALITY, 
-								    DEFAULT_PITCH, m_supertext.nFontFace );
-            if (gdi_font) 
-            {
-                // create new d3dx font at 'mid' size:
-                if (pCreateFontW(
-					    lpDevice, 
-						g_title_font_sizes[mid], 
-						0, 
-						m_supertext.bBold ? 900 : 400, 
-						1,                       
-						m_supertext.bItal, 
-						DEFAULT_CHARSET, 
-						OUT_DEFAULT_PRECIS, 
-						ANTIALIASED_QUALITY,//m_fontinfo[SONGTITLE_FONT].bAntiAliased ? ANTIALIASED_QUALITY : DEFAULT_QUALITY, 
-						DEFAULT_PITCH,
-						m_supertext.nFontFace, 
-						&d3dx_font
-				) == D3D_OK)
-                {
-                    if (lo == hi-1)
-                        break;      // DONE; but the 'lo'-size font is ready for use!
-
-                    // compute size of text if drawn w/font of THIS size:
-		            temp = rect;
-		            int h = d3dx_font->DrawTextW(NULL, szTextToDraw, -1, &temp, DT_SINGLELINE | DT_CALCRECT /*| DT_NOPREFIX*/, 0xFFFFFFFF);
-
-                    // adjust & prepare to reiterate:
-		            if (temp.right >= rect.right || h > rect.bottom-rect.top)
-			            hi = mid;
-		            else
-			            lo = mid;
-
-                    SafeRelease(d3dx_font);
-                }
-
-                DeleteObject(gdi_font); gdi_font=NULL;
-            }
-	    }
-
-        if (gdi_font && d3dx_font)
-        {
-	        // do actual drawing + set m_supertext.nFontSizeUsed; use 'lo' size
-            int h = d3dx_font->DrawTextW(NULL, szTextToDraw, -1, &temp, DT_SINGLELINE | DT_CALCRECT /*| DT_NOPREFIX*/ | DT_CENTER, 0xFFFFFFFF);
-	        temp.left   = 0;
-	        temp.right  = m_nTitleTexSizeX;  // now allow text to go all the way over, since we're actually drawing!
-            temp.top    = m_nTitleTexSizeY/2 - h/2;
-            temp.bottom = m_nTitleTexSizeY/2 + h/2;
-	        m_supertext.nFontSizeUsed = d3dx_font->DrawTextW(NULL, szTextToDraw, -1, &temp, DT_SINGLELINE /*| DT_NOPREFIX*/ | DT_CENTER, 0xFFFFFFFF);
-	        
-            ret = true;
-        }
-        else
-        {
-            ret = false;
-        }
-
-        // clean up font:
-        SafeRelease(d3dx_font);
-        if (gdi_font) DeleteObject(gdi_font); gdi_font=NULL;
-    }
-    else // song title
-    {
-        wchar_t* str = m_supertext.szTextW;
-
-        // clip the text manually...
-        // NOTE: DT_END_ELLIPSIS CAUSES NOTHING TO DRAW, IF YOU USE W/D3DX9!
-        int h;
-        int max_its = 6;
-        int it = 0;
-        while (it < max_its)
-        {
-            it++;
-
-            if (!str[0])
-                break;
-
-            RECT temp = rect;
-            h = m_d3dx_title_font_doublesize->DrawTextW(NULL, str, -1, &temp, DT_SINGLELINE | DT_CALCRECT /*| DT_NOPREFIX | DT_END_ELLIPSIS*/, 0xFFFFFFFF);
-            if (temp.right-temp.left <= m_nTitleTexSizeX)
-                break;
-
-			// 11/01/2009 DO - disabled as it was causing to users 'random' titles against
-			// what is expected so we now just work on the ellipse at the end approach which
-
-            // manually clip the text... chop segments off the front
-            /*wchar_t* p = wcsstr(str, L" - ");
-            if (p)
-            {
-                str = p+3;
-                continue;
-            }*/
-
-            // no more stuff to chop off the front; chop off the end w/ ...
-            int len = wcslen(str);
-            float fPercentToKeep = 0.91f * m_nTitleTexSizeX / (float)(temp.right-temp.left);
-            if (len > 8)
-                lstrcpyW( &str[ (int)(len*fPercentToKeep) ], L"...");            
-            break;
-        }
-
-        // now actually draw it
-        RECT temp;
-        temp.left   = 0;
-	    temp.right  = m_nTitleTexSizeX;  // now allow text to go all the way over, since we're actually drawing!
-        temp.top    = m_nTitleTexSizeY/2 - h/2;
-        temp.bottom = m_nTitleTexSizeY/2 + h/2;
-
-        // NOTE: DT_END_ELLIPSIS CAUSES NOTHING TO DRAW, IF YOU USE W/D3DX9!
-	    m_supertext.nFontSizeUsed = m_d3dx_title_font_doublesize->DrawTextW(NULL, str, -1, &temp, DT_SINGLELINE /*| DT_NOPREFIX | DT_END_ELLIPSIS*/ | DT_CENTER , 0xFFFFFFFF);
-    }
-
-    // Change the rendertarget back to the original setup
-    lpDevice->SetTexture(0, NULL);
-    lpDevice->SetRenderTarget( 0, pBackBuffer );
-	 //lpDevice->SetDepthStencilSurface( pZBuffer );
-    SafeRelease(pBackBuffer);
-    //SafeRelease(pZBuffer);
-
-	return ret;
-}
 
 void CPlugin::LoadPerFrameEvallibVars(CState* pState)
 {
@@ -868,32 +551,6 @@ void CPlugin::RenderFrame(int bRedraw)
 		        LoadRandomPreset(m_fBlendTimeAuto);
 	    }
 
-	    // randomly spawn Song Title, if time
-	    if (m_fTimeBetweenRandomSongTitles > 0 && 
-		    !m_supertext.bRedrawSuperText &&
-		    GetTime() >= m_supertext.fStartTime + m_supertext.fDuration + 1.0f/GetFps())
-	    {		
-		    int n = GetNumToSpawn(GetTime(), fDeltaT, 1.0f/m_fTimeBetweenRandomSongTitles, 0.5f, m_nSongTitlesSpawned);
-		    if (n > 0)
-		    {
-			    LaunchSongTitleAnim();
-			    m_nSongTitlesSpawned += n;
-		    }
-	    }
-
-	    // randomly spawn Custom Message, if time
-	    if (m_fTimeBetweenRandomCustomMsgs > 0 && 
-		    !m_supertext.bRedrawSuperText &&
-		    GetTime() >= m_supertext.fStartTime + m_supertext.fDuration + 1.0f/GetFps())
-	    {		
-		    int n = GetNumToSpawn(GetTime(), fDeltaT, 1.0f/m_fTimeBetweenRandomCustomMsgs, 0.5f, m_nCustMsgsSpawned);
-		    if (n > 0)
-		    {
-			    LaunchCustomMessage(-1);
-			    m_nCustMsgsSpawned += n;
-		    }
-	    }
-
 	    // update m_fBlendProgress;
 	    if (m_pState->m_bBlending)
 	    {
@@ -1022,14 +679,6 @@ void CPlugin::RenderFrame(int bRedraw)
         //      lpDevice->SetVertexShader( WFVERTEX_FORMAT );
     }
 
-    // render string to m_lpDDSTitle, if necessary
-	if (m_supertext.bRedrawSuperText)
-	{
-		if (!RenderStringToTitleTexture())
-            m_supertext.fStartTime = -1.0f;
-	    m_supertext.bRedrawSuperText = false;
-	}
-
     // set up to render [from NULL] to VS0 (for motion vectors).
     {
 	    lpDevice->SetTexture(0, NULL);
@@ -1139,16 +788,6 @@ void CPlugin::RenderFrame(int bRedraw)
 	DrawWave(mysound.fWave[0], mysound.fWave[1]);
 	DrawSprites();
 
-	float fProgress = (GetTime() - m_supertext.fStartTime) / m_supertext.fDuration;
-
-	// if song title animation just ended, burn it into the VS:
-	if (m_supertext.fStartTime >= 0 &&
-		fProgress >= 1.0f &&
-		!m_supertext.bRedrawSuperText)
-	{
-		ShowSongTitleAnim(m_nTexSizeX, m_nTexSizeY, 1.0f);
-	}
-
     // Change the rendertarget back to the original setup
     lpDevice->SetTexture(0, NULL);
     lpDevice->SetRenderTarget(0,  pBackBuffer );
@@ -1201,15 +840,6 @@ void CPlugin::RenderFrame(int bRedraw)
 	        ShowToUser_NoShaders();//1, false, false, false, false);
         }
     }
-
-	// finally, render song title animation to back buffer
-	if (m_supertext.fStartTime >= 0 &&
-		!m_supertext.bRedrawSuperText)
-	{
-		ShowSongTitleAnim(GetWidth(), GetHeight(), min(fProgress, 0.9999f));
-        if (fProgress >= 1.0f)
-            m_supertext.fStartTime = -1.0f;	// 'off' state
-	}
 
 	DrawUserSprites();
 
@@ -1389,127 +1019,6 @@ void CPlugin::DrawMotionVectors()
 		}
 	}
 }
-
-/*
-void CPlugin::UpdateSongInfo()
-{
-	if (m_bShowSongTitle || m_bSongTitleAnims)
-	{
-		char szOldSongMessage[512];
-		lstrcpy(szOldSongMessage, m_szSongMessage);
-
-		if (::GetWindowText(m_hWndParent, m_szSongMessage, sizeof(m_szSongMessage)))
-		{
-			// remove ' - Winamp' at end
-			if (strlen(m_szSongMessage) > 9)
-			{
-				int check_pos = strlen(m_szSongMessage) - 9;
-				if (lstrcmp(" - Winamp", (char *)(m_szSongMessage + check_pos)) == 0)
-					m_szSongMessage[check_pos] = 0;
-			}
-
-			// remove ' - Winamp [Paused]' at end
-			if (strlen(m_szSongMessage) > 18)
-			{
-				int check_pos = strlen(m_szSongMessage) - 18;
-				if (lstrcmp(" - Winamp [Paused]", (char *)(m_szSongMessage + check_pos)) == 0)
-					m_szSongMessage[check_pos] = 0;
-			}
-
-			// remove song # and period from beginning
-			char *p = m_szSongMessage;
-			while (*p >= '0' && *p <= '9') p++;
-			if (*p == '.' && *(p+1) == ' ')
-			{
-				p += 2;
-				int pos = 0;
-				while (*p != 0)
-				{
-					m_szSongMessage[pos++] = *p;
-					p++;
-				}
-				m_szSongMessage[pos++] = 0;
-			}
-
-			// fix &'s for display
-			/*
-			{
-				int pos = 0;
-				int len = strlen(m_szSongMessage);
-				while (m_szSongMessage[pos])
-				{
-					if (m_szSongMessage[pos] == '&')
-					{
-						for (int x=len; x>=pos; x--)
-							m_szSongMessage[x+1] = m_szSongMessage[x];
-						len++;
-						pos++;
-					}
-					pos++;
-				}
-			}*/
-			/*
-			if (m_bSongTitleAnims && 
-				((lstrcmp(szOldSongMessage, m_szSongMessage) != 0) || (GetFrame()==0)))
-			{
-				// launch song title animation
-				LaunchSongTitleAnim();
-
-				/*
-				m_supertext.bRedrawSuperText = true;
-				m_supertext.bIsSongTitle = true;
-				lstrcpy(m_supertext.szText, m_szSongMessage);
-				lstrcpy(m_supertext.nFontFace, m_szTitleFontFace);
-				m_supertext.fFontSize   = (float)m_nTitleFontSize;
-				m_supertext.bBold       = m_bTitleFontBold;
-				m_supertext.bItal       = m_bTitleFontItalic;
-				m_supertext.fX          = 0.5f;
-				m_supertext.fY          = 0.5f;
-				m_supertext.fGrowth     = 1.0f;
-				m_supertext.fDuration   = m_fSongTitleAnimDuration;
-				m_supertext.nColorR     = 255;
-				m_supertext.nColorG     = 255;
-				m_supertext.nColorB     = 255;
-
-				m_supertext.fStartTime  = GetTime(); 
-				*/
-/*			}
-		}
-		else
-		{
-			sprintf(m_szSongMessage, "<couldn't get song title>");
-		}
-	}
-
-	m_nTrackPlaying = SendMessage(m_hWndParent,WM_USER, 0, 125);
-
-	// append song time
-	if (m_bShowSongTime && m_nSongPosMS >= 0)
-	{
-		float time_s = m_nSongPosMS*0.001f;
-		
-		int minutes = (int)(time_s/60);
-		time_s -= minutes*60;
-		int seconds = (int)time_s;
-		time_s -= seconds;
-		int dsec = (int)(time_s*100);
-
-		sprintf(m_szSongTime, "%d:%02d.%02d", minutes, seconds, dsec);
-	}
-
-	// append song length
-	if (m_bShowSongLen && m_nSongLenMS > 0)
-	{
-		int len_s = m_nSongLenMS/1000;
-		int minutes = len_s/60;
-		int seconds = len_s - minutes*60;
-
-		char buf[512];
-		sprintf(buf, " / %d:%02d", minutes, seconds);
-		lstrcat(m_szSongTime, buf);
-	}
-}
-*/
 
 bool CPlugin::ReversePropagatePoint(float fx, float fy, float *fx2, float *fy2)
 {
@@ -4014,14 +3523,14 @@ void CPlugin::ApplyShaderParams(CShaderParams* p, LPD3DXCONSTANTTABLE pCT, CStat
         {
             D3DXMATRIX mx,my,mz,mxlate,temp;
 
-            pMatrixRotationX(&mx, pState->m_rot_base[i].x + pState->m_rot_speed[i].x*time);
-            pMatrixRotationY(&my, pState->m_rot_base[i].y + pState->m_rot_speed[i].y*time);
-            pMatrixRotationZ(&mz, pState->m_rot_base[i].z + pState->m_rot_speed[i].z*time);
-            pMatrixTranslation(&mxlate, pState->m_xlate[i].x, pState->m_xlate[i].y, pState->m_xlate[i].z);
+            D3DXMatrixRotationX(&mx, pState->m_rot_base[i].x + pState->m_rot_speed[i].x*time);
+            D3DXMatrixRotationY(&my, pState->m_rot_base[i].y + pState->m_rot_speed[i].y*time);
+            D3DXMatrixRotationZ(&mz, pState->m_rot_base[i].z + pState->m_rot_speed[i].z*time);
+            D3DXMatrixTranslation(&mxlate, pState->m_xlate[i].x, pState->m_xlate[i].y, pState->m_xlate[i].z);
 
-            pMatrixMultiply(&temp, &mx, &mxlate);
-            pMatrixMultiply(&temp, &temp, &mz);
-            pMatrixMultiply(&temp, &temp, &my);
+            D3DXMatrixMultiply(&temp, &mx, &mxlate);
+            D3DXMatrixMultiply(&temp, &temp, &mz);
+            D3DXMatrixMultiply(&temp, &temp, &my);
 
             pCT->SetMatrix(lpDevice, p->rot_mat[i], &temp);
         }
@@ -4033,14 +3542,14 @@ void CPlugin::ApplyShaderParams(CShaderParams* p, LPD3DXCONSTANTTABLE pCT, CStat
         {
             D3DXMATRIX mx,my,mz,mxlate,temp;
 
-            pMatrixRotationX(&mx, FRAND * 6.28f);
-            pMatrixRotationY(&my, FRAND * 6.28f);
-            pMatrixRotationZ(&mz, FRAND * 6.28f);
-            pMatrixTranslation(&mxlate, FRAND, FRAND, FRAND);
+            D3DXMatrixRotationX(&mx, FRAND * 6.28f);
+            D3DXMatrixRotationY(&my, FRAND * 6.28f);
+            D3DXMatrixRotationZ(&mz, FRAND * 6.28f);
+            D3DXMatrixTranslation(&mxlate, FRAND, FRAND, FRAND);
 
-            pMatrixMultiply(&temp, &mx, &mxlate);
-            pMatrixMultiply(&temp, &temp, &mz);
-            pMatrixMultiply(&temp, &temp, &my);
+            D3DXMatrixMultiply(&temp, &mx, &mxlate);
+            D3DXMatrixMultiply(&temp, &temp, &mz);
+            D3DXMatrixMultiply(&temp, &temp, &my);
 
             pCT->SetMatrix(lpDevice, p->rot_mat[i], &temp);
         }
@@ -4555,242 +4064,4 @@ void CPlugin::ShowToUser_Shaders(int nPass, bool bAlphaBlend, bool bFlipAlpha, b
     lpDevice->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
 
     RestoreShaderParams();
-}
-
-void CPlugin::ShowSongTitleAnim(int w, int h, float fProgress)
-{
-	int i,x,y;
-
-    if (!m_lpDDSTitle)  // this *can* be NULL, if not much video mem!
-        return;
-
-    LPDIRECT3DDEVICE9 lpDevice = GetDevice();
-    if (!lpDevice)
-        return;
-
-	lpDevice->SetTexture(0, m_lpDDSTitle);
-    lpDevice->SetVertexShader( NULL );
-    lpDevice->SetFVF( SPRITEVERTEX_FORMAT );
-
-	lpDevice->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
-	lpDevice->SetRenderState(D3DRS_SRCBLEND,  D3DBLEND_ONE);
-	lpDevice->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_ONE);
-
-	SPRITEVERTEX v3[128];
-	ZeroMemory(v3, sizeof(SPRITEVERTEX)*128);
-
-	if (m_supertext.bIsSongTitle)
-	{
-		// positioning:
-		float fSizeX = 50.0f / (float)m_supertext.nFontSizeUsed * powf(1.5f, m_supertext.fFontSize - 2.0f);
-		float fSizeY = fSizeX * m_nTitleTexSizeY/(float)m_nTitleTexSizeX;// * m_nWidth/(float)m_nHeight;
-
-		if (fSizeX > 0.88f)
-		{
-			fSizeY *= 0.88f/fSizeX;
-			fSizeX = 0.88f;
-		}
-
-        //fixme
-		if (fProgress < 1.0f)//(w!=h)	// regular render-to-backbuffer
-		{
-            //float aspect = w/(float)(h*4.0f/3.0f);
-  			//fSizeY *= aspect;
-		}
-		else 	// final render-to-VS0
-		{
-			//float aspect = GetWidth()/(float)(GetHeight()*4.0f/3.0f);
-			//if (aspect < 1.0f)
-			//{
-			//	fSizeX *= aspect;
-			//	fSizeY *= aspect;
-			//}
-            
-            //fSizeY *= -1;
-		}
-
-		//if (fSizeX > 0.92f) fSizeX = 0.92f;
-		//if (fSizeY > 0.92f) fSizeY = 0.92f;
-		i = 0;
-		float vert_clip = VERT_CLIP;//1.0f;//0.45f;	// warning: visible clipping has been observed at 0.4!
-		for (y=0; y<8; y++)
-		{
-			for (x=0; x<16; x++)
-			{
-				v3[i].tu = x/15.0f;
-				v3[i].tv = (y/7.0f - 0.5f)*vert_clip + 0.5f;
-				v3[i].x = (v3[i].tu*2.0f - 1.0f)*fSizeX;
-				v3[i].y = (v3[i].tv*2.0f - 1.0f)*fSizeY;
-                if (fProgress >= 1.0f)
-                    v3[i].y += 1.0f/(float)m_nTexSizeY;  //this is a pretty hacky guess @ getting it to align...
-				i++;
-			}
-		}
-
-		// warping
-		float ramped_progress = max(0.0f, 1-fProgress*1.5f);
-		float t2 = powf(ramped_progress, 1.8f)*1.3f;
-		for (y=0; y<8; y++)
-		{
-			for (x=0; x<16; x++)
-			{
-				i = y*16+x;
-				v3[i].x += t2*0.070f*sinf(GetTime()*0.31f + v3[i].x*0.39f - v3[i].y*1.94f);
-				v3[i].x += t2*0.044f*sinf(GetTime()*0.81f - v3[i].x*1.91f + v3[i].y*0.27f);
-				v3[i].x += t2*0.061f*sinf(GetTime()*1.31f + v3[i].x*0.61f + v3[i].y*0.74f);
-				v3[i].y += t2*0.061f*sinf(GetTime()*0.37f + v3[i].x*1.83f + v3[i].y*0.69f);
-				v3[i].y += t2*0.070f*sinf(GetTime()*0.67f + v3[i].x*0.42f - v3[i].y*1.39f);
-				v3[i].y += t2*0.087f*sinf(GetTime()*1.07f + v3[i].x*3.55f + v3[i].y*0.89f);
-			}
-		}
-
-		// scale down over time
-		float scale = 1.01f/(powf(fProgress, 0.21f) + 0.01f);
-		for (i=0; i<128; i++)
-		{
-			v3[i].x *= scale;
-			v3[i].y *= scale;
-		}
-	}
-	else
-	{
-		// positioning:
-		float fSizeX = (float)m_nTexSizeX/1024.0f * 100.0f / (float)m_supertext.nFontSizeUsed * powf(1.033f, m_supertext.fFontSize - 50.0f);
-		float fSizeY = fSizeX * m_nTitleTexSizeY/(float)m_nTitleTexSizeX;
-
-        //fixme
-		if (fProgress < 1.0f)//w!=h)	// regular render-to-backbuffer
-		{
-			//float aspect = w/(float)(h*4.0f/3.0f);
-			//fSizeY *= aspect;
-		}
-		else 	// final render-to-VS0
-		{
-			//float aspect = GetWidth()/(float)(GetHeight()*4.0f/3.0f);
-			//if (aspect < 1.0f)
-			//{
-			//	fSizeX *= aspect;
-			//	fSizeY *= aspect;
-			//}
-            //fSizeY *= -1;
-		}
-
-		//if (fSize > 0.92f) fSize = 0.92f;
-		i = 0;
-		float vert_clip = VERT_CLIP;//0.67f;	// warning: visible clipping has been observed at 0.5 (for very short strings) and even 0.6 (for wingdings)!
-		for (y=0; y<8; y++)
-		{
-			for (x=0; x<16; x++)
-			{
-				v3[i].tu = x/15.0f;
-				v3[i].tv = (y/7.0f - 0.5f)*vert_clip + 0.5f;
-				v3[i].x = (v3[i].tu*2.0f - 1.0f)*fSizeX;
-				v3[i].y = (v3[i].tv*2.0f - 1.0f)*fSizeY;
-                if (fProgress >= 1.0f)
-                    v3[i].y += 1.0f/(float)m_nTexSizeY;  //this is a pretty hacky guess @ getting it to align...
-				i++;
-			}
-		}
-
-		// apply 'growth' factor and move to user-specified (x,y)
-		//if (fabsf(m_supertext.fGrowth-1.0f) > 0.001f)
-		{
-			float t = (1.0f)*(1-fProgress) + (fProgress)*(m_supertext.fGrowth);
-			float dx = (m_supertext.fX*2-1);
-			float dy = (m_supertext.fY*2-1);
-			if (w!=h)	// regular render-to-backbuffer
-			{
-				float aspect = w/(float)(h*4.0f/3.0f);
-				if (aspect < 1)
-					dx /= aspect;
-				else
-					dy *= aspect;
-			}
-
-			for (i=0; i<128; i++)
-			{
-				// note: (x,y) are in (-1,1) range, but m_supertext.f{X|Y} are in (0..1) range
-				v3[i].x = (v3[i].x)*t + dx;
-				v3[i].y = (v3[i].y)*t + dy;
-			}
-		}
-	}
-
-	WORD indices[7*15*6];
-	i = 0;	
-	for (y=0; y<7; y++)
-	{
-		for (x=0; x<15; x++)
-		{
-			indices[i++] = y*16 + x;
-			indices[i++] = y*16 + x + 1;
-			indices[i++] = y*16 + x + 16;
-			indices[i++] = y*16 + x + 1;
-			indices[i++] = y*16 + x + 16;
-			indices[i++] = y*16 + x + 17;
-		}
-	}
-
-	// final flip on y
-	//for (i=0; i<128; i++)
-	//	v3[i].y *= -1.0f;
-	for (i=0; i<128; i++)
-		//v3[i].y /= ASPECT_Y;
-        v3[i].y *= m_fInvAspectY;
-
-	for (int it=0; it<2; it++)
-	{
-		// colors
-		{
-			float t;
-			
-			if (m_supertext.bIsSongTitle)
-				t = powf(fProgress, 0.3f)*1.0f;
-			else
-				t = CosineInterp(min(1.0f, (fProgress/m_supertext.fFadeTime)));
-			
-			if (it==0)
-				v3[0].Diffuse = D3DCOLOR_RGBA_01(t,t,t,t);
-			else
-				v3[0].Diffuse = D3DCOLOR_RGBA_01(t*m_supertext.nColorR/255.0f,t*m_supertext.nColorG/255.0f,t*m_supertext.nColorB/255.0f,t);
-
-			for (i=1; i<128; i++)
-				v3[i].Diffuse = v3[0].Diffuse;
-		}
-
-		// nudge down & right for shadow, up & left for solid text
-		float offset_x = 0, offset_y = 0;
-		switch(it)
-		{
-		case 0:
-			offset_x = 2.0f/(float)m_nTitleTexSizeX; 
-			offset_y = 2.0f/(float)m_nTitleTexSizeY; 
-			break;
-		case 1:
-			offset_x = -4.0f/(float)m_nTitleTexSizeX; 
-			offset_y = -4.0f/(float)m_nTitleTexSizeY; 
-			break;
-		}
-
-		for (i=0; i<128; i++)
-		{
-			v3[i].x += offset_x;
-			v3[i].y += offset_y;
-		}
-	
-		if (it == 0)
-		{
-			lpDevice->SetRenderState(D3DRS_SRCBLEND,  D3DBLEND_ZERO);//SRCALPHA);
-			lpDevice->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCCOLOR);
-		}
-		else 
-		{
-			lpDevice->SetRenderState(D3DRS_SRCBLEND,  D3DBLEND_ONE);//SRCALPHA);
-			lpDevice->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_ONE);
-		}
-		
-		lpDevice->DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, 128, 15*7*6/3, indices, D3DFMT_INDEX16, v3, sizeof(SPRITEVERTEX));
-	}
-
-	lpDevice->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
 }

@@ -29,7 +29,7 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "support.h"
 #include "utility.h"
-#include "../Winamp/wa_ipc.h"
+#include "wa_ipc.h"
 
 bool g_bDebugOutput = false;
 bool g_bDumpFileCleared = false;
@@ -117,7 +117,7 @@ void PrepareFor3DDrawing(
         pDevice->SetTransform(D3DTS_PROJECTION, &proj);
         
         D3DXMATRIX view;
-        pMatrixLookAtLH(&view, pvEye, pvLookat, pvUp);
+        D3DXMatrixLookAtLH(&view, pvEye, pvLookat, pvUp);
         pDevice->SetTransform(D3DTS_VIEW, &view);
 
         // Optimization note: "You can minimize the number of required calculations 
@@ -177,7 +177,7 @@ void PrepareFor2DDrawing(IDirect3DDevice9 *pDevice)
         D3DXMATRIX Ortho2D;    
         D3DXMATRIX Identity;
         
-        pMatrixOrthoLH(&Ortho2D, 2.0f, -2.0f, 0.0f, 1.0f);
+        D3DXMatrixOrthoLH(&Ortho2D, 2.0f, -2.0f, 0.0f, 1.0f);
         D3DXMatrixIdentity(&Identity);
 
         pDevice->SetTransform(D3DTS_PROJECTION, &Ortho2D);
@@ -210,23 +210,23 @@ void MakeWorldMatrix( D3DXMATRIX* pOut,
         D3DXMATRIX MatRot;
         D3DXMatrixIdentity(&MatRot);
 
-        pMatrixRotationX(&MatTemp, pitch);         // Pitch
-        pMatrixMultiply(&MatRot, &MatRot, &MatTemp);
-        pMatrixRotationY(&MatTemp, yaw);           // Yaw
-        pMatrixMultiply(&MatRot, &MatRot, &MatTemp);
-        pMatrixRotationZ(&MatTemp, roll);          // Roll
-        pMatrixMultiply(&MatRot, &MatRot, &MatTemp);
+        D3DXMatrixRotationX(&MatTemp, pitch);         // Pitch
+        D3DXMatrixMultiply(&MatRot, &MatRot, &MatTemp);
+        D3DXMatrixRotationY(&MatTemp, yaw);           // Yaw
+        D3DXMatrixMultiply(&MatRot, &MatRot, &MatTemp);
+        D3DXMatrixRotationZ(&MatTemp, roll);          // Roll
+        D3DXMatrixMultiply(&MatRot, &MatRot, &MatTemp);
  
-        pMatrixMultiply(pOut, pOut, &MatRot);
+        D3DXMatrixMultiply(pOut, pOut, &MatRot);
     }
 
     // 2. then, scaling
-    pMatrixScaling(&MatTemp, sx, sy, sz);
-    pMatrixMultiply(pOut, pOut, &MatTemp);
+    D3DXMatrixScaling(&MatTemp, sx, sy, sz);
+    D3DXMatrixMultiply(pOut, pOut, &MatTemp);
 
     // 3. last, translation to final world pos.
-    pMatrixTranslation(&MatTemp, xpos, ypos, zpos);
-    pMatrixMultiply(pOut, pOut, &MatTemp);
+    D3DXMatrixTranslation(&MatTemp, xpos, ypos, zpos);
+    D3DXMatrixMultiply(pOut, pOut, &MatTemp);
 }
 
 void MakeProjectionMatrix( D3DXMATRIX* pOut,
@@ -247,58 +247,6 @@ void MakeProjectionMatrix( D3DXMATRIX* pOut,
     pOut->_34 = 1;
 }
 
-void GetWinampSongTitle(HWND hWndWinamp, wchar_t *szSongTitle, int nSize)
-{
-    szSongTitle[0] = 0;
-	lstrcpynW(szSongTitle, (wchar_t*)SendMessage(hWndWinamp, WM_WA_IPC,
-									 SendMessage(hWndWinamp, WM_WA_IPC, 0 , IPC_GETLISTPOS),
-									 IPC_GETPLAYLISTTITLEW), nSize);
-}
-
-void GetWinampSongPosAsText(HWND hWndWinamp, wchar_t *szSongPos)
-{
-    // note: size(szSongPos[]) must be at least 64.
-    szSongPos[0] = 0;
-	int nSongPosMS = SendMessage(hWndWinamp,WM_USER,0,105);
-    if (nSongPosMS > 0)
-    {
-		wchar_t tmp[16];
-		float time_s = nSongPosMS*0.001f;
-		int minutes = (int)(time_s/60);
-		time_s -= minutes*60;
-		int seconds = (int)time_s;
-		time_s -= seconds;
-		int dsec = (int)(time_s*100);
-		swprintf(tmp, L"%.02f", dsec/100.0f);
-		swprintf(szSongPos, L"%d:%02d%s", minutes, seconds, tmp+1);
-    }
-}
-
-void GetWinampSongLenAsText(HWND hWndWinamp, wchar_t *szSongLen)
-{
-    // note: size(szSongLen[]) must be at least 64.
-    szSongLen[0] = 0;
-	int nSongLenMS = SendMessage(hWndWinamp,WM_USER,1,105)*1000;
-    if (nSongLenMS > 0)
-    {
-		int len_s = nSongLenMS/1000;
-		int minutes = len_s/60;
-		int seconds = len_s - minutes*60;
-		swprintf(szSongLen, L"%d:%02d", minutes, seconds);
-    }    
-}
-
-float GetWinampSongPos(HWND hWndWinamp)
-{
-    // returns answer in seconds
-    return (float)SendMessage(hWndWinamp,WM_USER,0,105)*0.001f;
-}
-
-float GetWinampSongLen(HWND hWndWinamp)
-{
-    // returns answer in seconds
-	return (float)SendMessage(hWndWinamp,WM_USER,1,105);
-}
 
 int GetDX9TexFormatBitsPerPixel(D3DFORMAT fmt)
 {

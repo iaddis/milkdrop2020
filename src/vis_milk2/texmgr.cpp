@@ -208,7 +208,7 @@ int texmgr::LoadTex(wchar_t *szFilename, int iSlot, char *szInitCode, char *szCo
 		wcscpy(m_tex[iSlot].szFileName, szFilename);
 
         D3DXIMAGE_INFO info;
-        HRESULT hr = pCreateTextureFromFileExW(
+        HRESULT hr = D3DXCreateTextureFromFileExW(
           m_lpDD,
           szFilename,
           D3DX_DEFAULT,

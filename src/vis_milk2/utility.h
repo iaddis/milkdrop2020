@@ -34,6 +34,8 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <crtdefs.h>
 #include <d3d9.h>
 #include <d3dx9.h>
+#include <vector>
+#include <string>
 
 #define SafeRelease(x) { if (x) {x->Release(); x=NULL;} } 
 #define SafeDelete(x) { if (x) {delete x; x=NULL;} }
@@ -52,24 +54,18 @@ bool    WritePrivateProfileIntW(int d, wchar_t *szKeyName, wchar_t *szIniFile, w
 bool    WritePrivateProfileFloatW(float f, wchar_t *szKeyName, wchar_t *szIniFile, wchar_t *szSectionName);
 
 extern  _locale_t g_use_C_locale;
-extern	char keyMappings[8];
 
-void	SetScrollLock(int bNewState, bool bPreventHandling);
 void    RemoveExtension(wchar_t *str);
 void    RemoveSingleAmpersands(wchar_t *str);
 void    TextToGuid(char *str, GUID *pGUID);
 void    GuidToText(GUID *pGUID, char *str, int nStrLen);
-//int    GetPentiumTimeRaw(unsigned __int64 *cpu_timestamp);
-//double GetPentiumTimeAsDouble(unsigned __int64 frequency);
 #ifdef _DEBUG
     void    OutputDebugMessage(char *szStartText, HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam); // only available in RELEASE builds!
 #endif
-void    MissingDirectX(HWND hwnd);
 bool    CheckForMMX();
 bool    CheckForSSE();
 void    GetDesktopFolder(char *szDesktopFolder); // should be MAX_PATH len.
 
-#include "icon_t.h"
 #include <shlobj.h>
 #include <list>
 
@@ -96,69 +92,6 @@ bool ReadCBValue(HWND hwnd, DWORD ctrl_id, int* pRetValue);
 LRESULT GetWinampVersion(HWND winamp);
 void* GetTextResource(UINT id, int no_fallback);
 
-HMODULE FindD3DX9(HWND winamp);
+void GetDirectoryFiles(const wchar_t *dir, const wchar_t *pattern, bool recurse, std::vector<std::wstring> &files);
 
-intptr_t myOpenURL(HWND hwnd, wchar_t *loc);
-
-typedef HRESULT (WINAPI *D3DXCREATEFONTW)(LPDIRECT3DDEVICE9, INT, UINT, UINT, UINT, BOOL, DWORD, DWORD, DWORD, DWORD, LPCWSTR, LPD3DXFONT *);
-extern D3DXCREATEFONTW pCreateFontW;
-
-typedef D3DXMATRIX *(WINAPI *D3DXMATRIXMULTIPLY)(D3DXMATRIX *pOut, CONST D3DXMATRIX *pM1, CONST D3DXMATRIX *pM2);
-extern D3DXMATRIXMULTIPLY pMatrixMultiply;
-
-typedef D3DXMATRIX* (WINAPI *D3DXMATRIXTRANSLATION)( D3DXMATRIX *pOut, FLOAT x, FLOAT y, FLOAT z );
-extern D3DXMATRIXTRANSLATION pMatrixTranslation;
-
-typedef D3DXMATRIX* (WINAPI *D3DXMATRIXSCALING)( D3DXMATRIX *pOut, FLOAT sx, FLOAT sy, FLOAT sz );
-extern D3DXMATRIXSCALING pMatrixScaling;
-
-typedef D3DXMATRIX* (WINAPI *D3DXMATRIXROTATION)( D3DXMATRIX *pOut, FLOAT Angle );
-extern D3DXMATRIXROTATION pMatrixRotationX, pMatrixRotationY, pMatrixRotationZ;
-
-typedef HRESULT (WINAPI *D3DXCREATETEXTUREFROMFILEEXW)(
-        LPDIRECT3DDEVICE9         pDevice,
-        LPCWSTR                   pSrcFile,
-        UINT                      Width,
-        UINT                      Height,
-        UINT                      MipLevels,
-        DWORD                     Usage,
-        D3DFORMAT                 Format,
-        D3DPOOL                   Pool,
-        DWORD                     Filter,
-        DWORD                     MipFilter,
-        D3DCOLOR                  ColorKey,
-        D3DXIMAGE_INFO*           pSrcInfo,
-        PALETTEENTRY*             pPalette,
-        LPDIRECT3DTEXTURE9*       ppTexture);
-extern D3DXCREATETEXTUREFROMFILEEXW pCreateTextureFromFileExW;
-
-typedef D3DXMATRIX* (WINAPI *D3DXMATRIXORTHOLH)(D3DXMATRIX *pOut, FLOAT w, FLOAT h, FLOAT zn, FLOAT zf);
-extern D3DXMATRIXORTHOLH pMatrixOrthoLH;
-
-typedef HRESULT (WINAPI *D3DXCOMPILESHADER)(
-        LPCSTR                          pSrcData,
-        UINT                            SrcDataLen,
-        CONST D3DXMACRO*                pDefines,
-        LPD3DXINCLUDE                   pInclude,
-        LPCSTR                          pFunctionName,
-        LPCSTR                          pProfile,
-        DWORD                           Flags,
-        LPD3DXBUFFER*                   ppShader,
-        LPD3DXBUFFER*                   ppErrorMsgs,
-        LPD3DXCONSTANTTABLE*            ppConstantTable);
-extern D3DXCOMPILESHADER pCompileShader;
-
-typedef D3DXMATRIX* (WINAPI *D3DXMATRIXLOOKATLH)( D3DXMATRIX *pOut, CONST D3DXVECTOR3 *pEye, CONST D3DXVECTOR3 *pAt, CONST D3DXVECTOR3 *pUp );
-extern D3DXMATRIXLOOKATLH pMatrixLookAtLH;
-
-typedef HRESULT (WINAPI *D3DXCREATETEXTURE)(
-        LPDIRECT3DDEVICE9         pDevice,
-        UINT                      Width,
-        UINT                      Height,
-        UINT                      MipLevels,
-        DWORD                     Usage,
-        D3DFORMAT                 Format,
-        D3DPOOL                   Pool,
-        LPDIRECT3DTEXTURE9*       ppTexture);
-extern D3DXCREATETEXTURE pCreateTexture;
 #endif

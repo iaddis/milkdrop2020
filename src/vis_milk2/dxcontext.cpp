@@ -39,9 +39,9 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // note: added WS_EX_CONTROLPARENT and WS_TABSTOP for embedwnd so window frame will pass on KB commands to us, if it has focus & receives them.
 //       however, it is still not working.  Maksim says he needs to use GetNextDlgTabItem() and then it will work.
 //       aha- had to remove WS_EX_CONTROLPARENT and WS_OVERLAPPED.  Should now work with winamp 5.5 build 1620.
-#define MY_EXT_WINDOW_STYLE (m_current_mode.m_skin ? 0/*WS_EX_CONTROLPARENT*/ : ((m_current_mode.screenmode==DESKTOP) ? (WS_EX_TOOLWINDOW) : 0)) // note: changed from TOOLWINDOW to APPWINDOW b/c we wanted the plugin to appear in the taskbar.
+#define MY_EXT_WINDOW_STYLE (m_current_mode.m_skin ? 0/*WS_EX_CONTROLPARENT*/ : (0)) // note: changed from TOOLWINDOW to APPWINDOW b/c we wanted the plugin to appear in the taskbar.
 #define SKINNED_WS (WS_VISIBLE|WS_CHILDWINDOW/*|WS_OVERLAPPED*/|WS_CLIPCHILDREN|WS_CLIPSIBLINGS|WS_TABSTOP)
-#define MY_WINDOW_STYLE (m_current_mode.m_skin ? SKINNED_WS : ((m_current_mode.screenmode==FAKE_FULLSCREEN || m_current_mode.screenmode==DESKTOP) ? WS_POPUP : WS_OVERLAPPEDWINDOW))   // note: WS_POPUP (by itself) removes all borders, captions, etc.
+#define MY_WINDOW_STYLE (m_current_mode.m_skin ? SKINNED_WS : ((m_current_mode.screenmode==FAKE_FULLSCREEN) ? WS_POPUP : WS_OVERLAPPEDWINDOW))   // note: WS_POPUP (by itself) removes all borders, captions, etc.
 
 #include "vis.h"
 extern winampVisModule mod1;
@@ -95,12 +95,8 @@ DXContext::DXContext(HWND hWndWinamp,HINSTANCE hInstance,LPCWSTR szClassName,LPC
 	m_classAtom = RegisterClassW(&wc);
 	if (!m_classAtom)
 	{
-		wchar_t title[64];
-		int y = GetLastError();
+		Log::Error("IDS_UNABLE_TO_REGISTER_WINDOW_CLASS");
 		m_lastErr = DXC_ERR_REGWIN;
-		MessageBoxW(m_hwnd, WASABI_API_LNGSTRINGW(IDS_UNABLE_TO_REGISTER_WINDOW_CLASS),
-				    WASABI_API_LNGSTRINGW_BUF(IDS_MILKDROP_ERROR, title, 64),
-				    MB_OK|MB_SETFOREGROUND|MB_TOPMOST);
 		Internal_CleanUp();
 		return;
 	}
@@ -447,17 +443,6 @@ BOOL DXContext::Internal_Init(DXCONTEXT_PARAMS *pParams, BOOL bFirstInit)
 		    !(m_lpD3D = Direct3DCreate9(D3D_SDK_VERSION))
 		   )
 		{
-			MissingDirectX(NULL);
-			m_lastErr = DXC_ERR_CREATE3D;
-			return FALSE;
-		}
-
-		if (!m_hmod_d3dx9)
-			m_hmod_d3dx9 = FindD3DX9(m_hwnd_winamp);
-
-		if ((!m_hmod_d3dx9))
-		{
-			MissingDirectX(NULL);
 			m_lastErr = DXC_ERR_CREATE3D;
 			return FALSE;
 		}
@@ -564,11 +549,8 @@ BOOL DXContext::Internal_Init(DXCONTEXT_PARAMS *pParams, BOOL bFirstInit)
 
 			if (m_current_mode.display_mode.Format==D3DFMT_UNKNOWN)
 			{
-				wchar_t title[64];
+				Log::Error("IDS_DIRECTX_INIT_FAILED");
 				m_lastErr = DXC_ERR_FORMAT;
-				MessageBoxW(m_hwnd, WASABI_API_LNGSTRINGW(IDS_DIRECTX_INIT_FAILED),
-						    WASABI_API_LNGSTRINGW_BUF(IDS_MILKDROP_ERROR, title, 64),
-						    MB_OK|MB_SETFOREGROUND|MB_TOPMOST);
 				return FALSE;
 			}
 
@@ -603,11 +585,8 @@ BOOL DXContext::Internal_Init(DXCONTEXT_PARAMS *pParams, BOOL bFirstInit)
 				}
 				else
 				{
-					wchar_t title[64];
 					m_lastErr = DXC_ERR_CAPSFAIL;
-					MessageBoxW(m_hwnd, WASABI_API_LNGSTRINGW(IDS_DXC_ERR_CAPSFAIL),
-							    WASABI_API_LNGSTRINGW_BUF(IDS_MILKDROP_ERROR, title, 64),
-							    MB_OK|MB_SETFOREGROUND|MB_TOPMOST);
+					Log::Error("IDS_DXC_ERR_CAPSFAIL");
 					return FALSE;
 				}
 			}
@@ -620,10 +599,7 @@ BOOL DXContext::Internal_Init(DXCONTEXT_PARAMS *pParams, BOOL bFirstInit)
 
 		if (changed_fs_disp_mode)
 		{
-			wchar_t title[64];
-			MessageBoxW(m_hwnd, WASABI_API_LNGSTRINGW(IDS_FS_DISPLAY_MODE_SELECTED_IS_INVALID),
-					    WASABI_API_LNGSTRINGW_BUF(IDS_MILKDROP_WARNING, title, 64),
-					    MB_OK|MB_SETFOREGROUND|MB_TOPMOST);
+			Log::Error("IDS_FS_DISPLAY_MODE_SELECTED_IS_INVALID");
 		}
 
 		switch (m_current_mode.display_mode.Format)
@@ -721,11 +697,7 @@ BOOL DXContext::Internal_Init(DXCONTEXT_PARAMS *pParams, BOOL bFirstInit)
 
 		if (!m_hwnd)
 		{
-			wchar_t title[64];
-			m_lastErr = DXC_ERR_CREATEWIN;
-			MessageBoxW(m_hwnd, WASABI_API_LNGSTRINGW(IDS_CREATEWINDOW_FAILED),
-					    WASABI_API_LNGSTRINGW_BUF(IDS_MILKDROP_ERROR, title, 64),
-					    MB_OK|MB_SETFOREGROUND|MB_TOPMOST);
+			Log::Error("IDS_CREATEWINDOW_FAILED");
 			return FALSE;
 		}
 
@@ -752,8 +724,7 @@ BOOL DXContext::Internal_Init(DXCONTEXT_PARAMS *pParams, BOOL bFirstInit)
 	do
 	{
 		// set the window position
-		if (m_current_mode.screenmode==DESKTOP ||
-		    m_current_mode.screenmode==FAKE_FULLSCREEN)
+		if (m_current_mode.screenmode==FAKE_FULLSCREEN)
 		{
 			int x = m_monitor_rect.right - m_monitor_rect.left;
 			int y = m_monitor_rect.bottom - m_monitor_rect.top;
@@ -786,62 +757,6 @@ BOOL DXContext::Internal_Init(DXCONTEXT_PARAMS *pParams, BOOL bFirstInit)
 			m_window_width  = x;
 			m_window_height = y;
 
-			if (m_current_mode.screenmode == DESKTOP)
-			{
-				// note: we initially hide the window, and then
-				// only display it once the desktop is all nice & ready.
-				// see CPluginShell::DrawAndDisplay().
-
-				RECT r = m_monitor_rect;
-
-				// if possible, shrink the desktop window so it doesn't cover the taskbar.
-				HWND hTaskbar = FindWindow("Shell_TrayWnd", "");
-				if (hTaskbar)
-				{
-					RECT taskbar;
-					GetWindowRect(hTaskbar, &taskbar);
-					int tbw = taskbar.right - taskbar.left;
-					int tbh = taskbar.bottom-taskbar.top;
-
-					if (taskbar.bottom == m_monitor_rect.bottom &&
-					    taskbar.left == m_monitor_rect.left &&
-					    taskbar.right == m_monitor_rect.right)
-					{
-						r.bottom -= tbh;
-					}
-					else if (taskbar.top == m_monitor_rect.top &&
-					         taskbar.left == m_monitor_rect.left &&
-					         taskbar.right == m_monitor_rect.right)
-					{
-						r.top += tbh;
-					}
-					else if (taskbar.left == m_monitor_rect.left &&
-					         taskbar.top == m_monitor_rect.top &&
-					         taskbar.bottom == m_monitor_rect.bottom)
-					{
-						r.left += tbw;
-					}
-					else if (taskbar.right == m_monitor_rect.right &&
-					         taskbar.top == m_monitor_rect.top &&
-					         taskbar.bottom == m_monitor_rect.bottom)
-					{
-						r.right -= tbw;
-					}
-
-					m_client_width  = r.right - r.left;
-					m_client_height = r.bottom - r.top;
-					m_REAL_client_width = m_client_width;
-					m_REAL_client_height = m_client_height;
-					m_window_width  = m_client_width;
-					m_window_height = m_client_height;
-
-					//...ok, but text is squished - some w/h is not right...
-
-				}
-
-				SetWindowPos(m_hwnd,HWND_BOTTOM,r.left,r.top,r.right-r.left,r.bottom-r.top,SWP_HIDEWINDOW);
-			}
-			else // FAKE_FULLSCREEN
 			{
 				if (memcmp(&m_all_monitors_rect, &m_monitor_rect, sizeof(RECT))==0)
 				{
@@ -957,17 +872,6 @@ BOOL DXContext::Internal_Init(DXCONTEXT_PARAMS *pParams, BOOL bFirstInit)
 				m_REAL_client_width  = r.right - r.left;
 				m_REAL_client_height = r.bottom - r.top;
 				GetSnappedClientSize();
-				if (m_current_mode.m_skin) // check this here in case they got a non-aligned size by resizing when "integrated with winamp" was unchecked, then checked it & ran the plugin...
-				{
-					// STRANGE ALIGNMENTS FOR THE WINDOW FRAME: (required by winamp 2):
-					// the window frame's width must be divisible by 25, and height by 29.
-					if (GetWinampVersion(mod1.hwndParent) < 0x4000) // ... winamp 5 doesn't have this prob.  (test vs. 0x4000 because winamp5 betas have version tags like 0x4987)
-					{
-						m_REAL_client_width  = ((m_client_width + margin.left + margin.right)/25)*25 - margin.left - margin.right;
-						m_REAL_client_height = ((m_client_height + margin.top + margin.bottom)/29)*29 - margin.top - margin.bottom;
-						GetSnappedClientSize();
-					}
-				}
 
 				// transform screen-space CLIENT rect into screen-space WINDOW rect
 				r.top    = windowed_mode_desired_client_rect.top    - margin.top;
@@ -1016,15 +920,6 @@ BOOL DXContext::Internal_Init(DXCONTEXT_PARAMS *pParams, BOOL bFirstInit)
 
 				if (m_current_mode.m_skin)
 				{
-					// STRANGE ALIGNMENTS FOR THE WINDOW FRAME: (required by winamp 2):
-					// the window frame's width must be divisible by 25, and height by 29.
-					if (GetWinampVersion(mod1.hwndParent) < 0x4000) // ... winamp 5 doesn't have this prob.  (test vs. 0x4000 because winamp5 betas have version tags like 0x4987)
-					{
-						m_REAL_client_width  = ((m_client_width + margin.left + margin.right)/25)*25 - margin.left - margin.right;
-						m_REAL_client_height = ((m_client_height + margin.top + margin.bottom)/29)*29 - margin.top - margin.bottom;
-						GetSnappedClientSize();
-					}
-
 					m_window_width  = m_client_width ; // m_window_width/height are for OUR [borderless] window, not the parent window (which is the embedwnd frame).
 					m_window_height = m_client_height;
 					SetWindowPos(m_current_mode.parent_window,HWND_NOTOPMOST, m_monitor_work_rect.left+32, m_monitor_work_rect.top+32, m_client_width + margin.left + margin.right, m_client_height + margin.top + margin.bottom, /*SWP_SHOWWINDOW|*//*SWP_ASYNCWINDOWPOS*/0);
@@ -1086,22 +981,10 @@ BOOL DXContext::Internal_Init(DXCONTEXT_PARAMS *pParams, BOOL bFirstInit)
 			{
 				int code = LOWORD(hRes);
 
-				wchar_t str[1024];
 				if (code==2156) //D3DERR_NOTAVAILABLE
 				{
 					m_lastErr = DXC_ERR_CREATEDEV_NOT_AVAIL;
-
-					wchar_t str[2048];
-					WASABI_API_LNGSTRINGW_BUF(IDS_UNABLE_TO_CREATE_DIRECTX_DEVICE, str, 2048);
-
-					if (m_current_mode.screenmode == FULLSCREEN)
-						StringCbCatW(str, sizeof(str), WASABI_API_LNGSTRINGW(IDS_OLDER_DISPLAY_ADAPTER_CATENATION));
-					else
-						StringCbCatW(str, sizeof(str), WASABI_API_LNGSTRINGW(IDS_OLDER_DISPLAY_ADAPTER_CATENATION_2));
-
-					MessageBoxW(m_hwnd,str,
-							   WASABI_API_LNGSTRINGW(IDS_MILKDROP_ERROR),
-							   MB_OK|MB_SETFOREGROUND|MB_TOPMOST);
+					Log::Error("IDS_UNABLE_TO_CREATE_DIRECTX_DEVICE");
 					return FALSE;
 				}
 				else if (m_current_mode.screenmode==WINDOWED && m_client_width>64)
@@ -1110,14 +993,7 @@ BOOL DXContext::Internal_Init(DXCONTEXT_PARAMS *pParams, BOOL bFirstInit)
 				}
 				else if (m_current_mode.screenmode != WINDOWED || m_client_width <= 64)
 				{
-					// usually, code==2154 here, which is D3DERR_OUTOFVIDEOMEMORY
-					m_lastErr = DXC_ERR_CREATEDEV_PROBABLY_OUTOFVIDEOMEMORY;
-					StringCbPrintfW(str, sizeof(str), WASABI_API_LNGSTRINGW(IDS_DIRECTX_INIT_FAILED_X), LOWORD(hRes));
-
-					// NOTE: *A 'SUGGESTION' SCREEN SHOULD APPEAR NEXT, PROVIDED BY THE CALLER*
-					MessageBoxW(m_hwnd, str,
-							    WASABI_API_LNGSTRINGW(IDS_MILKDROP_ERROR),
-							    MB_OK|MB_SETFOREGROUND|MB_TOPMOST);
+					Log::Error("DXC_ERR_CREATEDEV_PROBABLY_OUTOFVIDEOMEMORY");
 					return FALSE;
 				}
 			}
@@ -1133,10 +1009,6 @@ BOOL DXContext::Internal_Init(DXCONTEXT_PARAMS *pParams, BOOL bFirstInit)
 
 	// set initial viewport
 	SetViewport();
-
-	// for desktop mode, push window to back again:
-	if (m_current_mode.screenmode==DESKTOP)
-		SetWindowPos(m_hwnd,HWND_BOTTOM,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE);
 
 	if (m_current_mode.m_skin)
 	{

@@ -34,22 +34,13 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "dxcontext.h"
 #include "fft.h"
 #include "defines.h"
-#include "textmgr.h"
+#include "md_defines.h"
 
-#include "icon_t.h"
-#include "../nu/Vector.h"
+#include "Vector.h"
+#include "AutoWide.h"
 
 #define TIME_HIST_SLOTS 128     // # of slots used if fps > 60.  half this many if fps==30.
 #define MAX_SONGS_PER_PAGE 40
-
-typedef struct
-{
-    wchar_t szFace[256];
-    int nSize;  // size requested @ font creation time
-    int bBold;
-    int bItalic;
-    int bAntiAliased;
-} td_fontinfo;
 
 typedef struct
 {
@@ -95,24 +86,15 @@ protected:
     char*        GetDriverFilename();    // returns a text string with the filename of the current display adapter driver, such as "nv4_disp.dll"
     char*        GetDriverDescription(); // returns a text string describing the current display adapter, such as "NVIDIA GeForce4 Ti 4200"
 
-    // FONTS & TEXT
-    // ------------------------------------------------------------
-public:
-    LPD3DXFONT   GetFont(eFontIndex idx);       // returns a D3DX font handle for drawing text; see shell_defines.h for the definition of the 'eFontIndex' enum.
-    int          GetFontHeight(eFontIndex idx); // returns the height of the font, in pixels; see shell_defines.h for the definition of the 'eFontIndex' enum.
-    CTextManager m_text;
 protected:
 
     // MISC
     // ------------------------------------------------------------
     td_soundinfo m_sound;                   // a structure always containing the most recent sound analysis information; defined in pluginshell.h.
-    void         SuggestHowToFreeSomeMem(); // gives the user a 'smart' messagebox that suggests how they can free up some video memory.
 
     // CONFIG PANEL SETTINGS
     // ------------------------------------------------------------
     // *** only read/write these values during CPlugin::OverrideDefaults! ***
-    int          m_start_fullscreen;        // 0 or 1
-    int          m_start_desktop;           // 0 or 1
     int          m_fake_fullscreen_mode;    // 0 or 1
     int          m_max_fps_fs;              // 1-120, or 0 for 'unlimited'
     int          m_max_fps_dm;              // 1-120, or 0 for 'unlimited'
@@ -122,16 +104,11 @@ protected:
     int          m_allow_page_tearing_fs;   // 0 or 1
     int          m_allow_page_tearing_dm;   // 0 or 1
     int          m_minimize_winamp;         // 0 or 1
-    int          m_desktop_show_icons;      // 0 or 1
-    int          m_desktop_textlabel_boxes; // 0 or 1
-    int          m_desktop_manual_icon_scoot; // 0 or 1
-    int          m_desktop_555_fix;         // 0 = 555, 1 = 565, 2 = 888
     int          m_dualhead_horz;           // 0 = both, 1 = left, 2 = right
     int          m_dualhead_vert;           // 0 = both, 1 = top, 2 = bottom
     int          m_save_cpu;                // 0 or 1
     int          m_skin;                    // 0 or 1
     int          m_fix_slow_text;           // 0 or 1
-    td_fontinfo  m_fontinfo[NUM_BASIC_FONTS + NUM_EXTRA_FONTS];
     D3DDISPLAYMODE m_disp_mode_fs;          // a D3DDISPLAYMODE struct that specifies the width, height, refresh rate, and color format to use when the plugin goes fullscreen.
 
     // PURE VIRTUAL FUNCTIONS (...must be implemented by derived classes)
@@ -145,10 +122,7 @@ protected:
     virtual int  AllocateMyDX9Stuff()    = 0;
     virtual void  CleanUpMyDX9Stuff(int final_cleanup) = 0;
     virtual void MyRenderFn(int redraw)  = 0;
-    virtual void MyRenderUI(int *upper_left_corner_y, int *upper_right_corner_y, int *lower_left_corner_y, int *lower_right_corner_y, int xL, int xR) = 0;
     virtual LRESULT MyWindowProc(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lParam) = 0;
-    virtual BOOL MyConfigTabProc(int nPage, HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam) = 0;
-    virtual void OnAltK() { }; // doesn't *have* to be implemented
 
 //=====================================================================================================================
 private:
@@ -162,15 +136,9 @@ private:
     HINSTANCE    m_hInstance;       // handle to application instance
     DXContext*   m_lpDX;            // pointer to DXContext object
     wchar_t      m_szPluginsDirPath[MAX_PATH];  // usually 'c:\\program files\\winamp\\plugins\\'
+    wchar_t      m_szImgIniFile[MAX_PATH];
     wchar_t      m_szConfigIniFile[MAX_PATH];   // usually 'c:\\program files\\winamp\\plugins\\something.ini' - filename is determined from identifiers in 'defines.h'
 	char         m_szConfigIniFileA[MAX_PATH];   // usually 'c:\\program files\\winamp\\plugins\\something.ini' - filename is determined from identifiers in 'defines.h'
-    
-    // FONTS
-	IDirect3DTexture9* m_lpDDSText;
-    LPD3DXFONT   m_d3dx_font[NUM_BASIC_FONTS + NUM_EXTRA_FONTS];
-    LPD3DXFONT   m_d3dx_desktop_font;
-    HFONT        m_font[NUM_BASIC_FONTS + NUM_EXTRA_FONTS];
-    HFONT        m_font_desktop;
     
     // PRIVATE CONFIG PANEL SETTINGS
     D3DMULTISAMPLE_TYPE m_multisample_fullscreen;
@@ -187,55 +155,7 @@ private:
     int m_lost_focus;     // ~mostly for fullscreen mode
     int m_hidden;         // ~mostly for windowed mode
     int m_resizing;       // ~mostly for windowed mode
-    int m_show_help;
-    int m_show_playlist;
-    int  m_playlist_pos;            // current selection on (plugin's) playlist menu
-    int  m_playlist_pageups;        // can be + or -
-    int  m_playlist_top_idx;        // used to track when our little playlist cache (m_playlist) needs updated.
-    int  m_playlist_btm_idx;        // used to track when our little playlist cache (m_playlist) needs updated.
-    int  m_playlist_width_pixels;   // considered invalid whenever 'm_playlist_top_idx' is -1.
-    wchar_t m_playlist[MAX_SONGS_PER_PAGE][256];   // considered invalid whenever 'm_playlist_top_idx' is -1.
     int m_exiting;
-    int m_upper_left_corner_y;
-    int m_lower_left_corner_y;
-    int m_upper_right_corner_y;
-    int m_lower_right_corner_y;
-    int m_left_edge;
-    int m_right_edge;
-    int m_force_accept_WM_WINDOWPOSCHANGING;
-
-    // PRIVATE - GDI STUFF
-    HMENU               m_main_menu;
-    HMENU               m_context_menu;
-
-    // PRIVATE - DESKTOP MODE STUFF
-    //typedef std::list<icon_t> IconList;
-    typedef Vector<icon_t> IconList;
-    IconList        m_icon_list;
-    IDirect3DTexture9*  m_desktop_icons_texture[MAX_ICON_TEXTURES];
-    HWND                m_hWndProgMan;
-    HWND                m_hWndDesktop;
-    HWND                m_hWndDesktopListView;
-    char                m_szDesktopFolder[MAX_PATH];   // *without* the final backslash
-    int                 m_desktop_icon_size;
-    int                 m_desktop_dragging;  // '1' when user is dragging icons around
-    int                 m_desktop_box;       // '1' when user is drawing a box
-    BYTE                m_desktop_drag_pidl[1024]; // cast this to ITEMIDLIST
-    POINT               m_desktop_drag_startpos; // applies to dragging or box-drawing
-    POINT               m_desktop_drag_curpos;   // applies to dragging or box-drawing
-    int                 m_desktop_wc_registered;
-    DWORD               m_desktop_bk_color;
-    DWORD               m_desktop_text_color;
-    DWORD               m_desktop_sel_color;
-    DWORD               m_desktop_sel_text_color;
-    int                 m_desktop_icon_state;   // 0=uninit, 1=total refresh in progress, 2=ready, 3=update in progress
-    int                 m_desktop_icon_count;
-    int                 m_desktop_icon_update_frame;
-    CRITICAL_SECTION    m_desktop_cs;
-    int                 m_desktop_icons_disabled;
-    int                 m_vms_desktop_loaded;
-    int                 m_desktop_hook_set;
-    bool                m_bClearVJWindow;
 
     // PRIVATE - MORE TIMEKEEPING
    protected:
@@ -262,16 +182,9 @@ public:
     int  PluginRender(unsigned char *pWaveL, unsigned char *pWaveR);
     void PluginQuit();
 
-    void ToggleHelp();
-    void TogglePlaylist();
-
-	void READ_FONT(int n);
-	void WRITE_FONT(int n);
-    
     // config panel / windows messaging processes:
     static LRESULT CALLBACK WindowProc(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lParam);
     static LRESULT CALLBACK DesktopWndProc(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lParam);
-    static LRESULT CALLBACK VJModeWndProc(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lParam);
     static INT_PTR CALLBACK ConfigDialogProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam);
     static INT_PTR CALLBACK TabCtrlProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam);
     static INT_PTR CALLBACK FontDialogProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam);
@@ -288,61 +201,21 @@ private:
     void AlignWaves();
     int  InitDirectX();
     void CleanUpDirectX();
-    int  InitGDIStuff();
-    void CleanUpGDIStuff();
     int  AllocateDX9Stuff();
     void CleanUpDX9Stuff(int final_cleanup);
     int  InitNondx9Stuff();
     void CleanUpNondx9Stuff();
-    int  InitVJStuff(RECT* pClientRect=NULL);
-    void CleanUpVJStuff();
-    int  AllocateFonts(IDirect3DDevice9 *pDevice);
-    void CleanUpFonts();
-    void AllocateTextSurface();
-    void ToggleDesktop();
     void OnUserResizeWindow();
     void OnUserResizeTextWindow();
     void PrepareFor2DDrawing_B(IDirect3DDevice9 *pDevice, int w, int h);
-    void RenderBuiltInTextMsgs();
-    int  GetCanvasMarginX();     // returns the # of pixels that exist on the canvas, on each side, that the user will never see.  Mainly here for windowed mode, where sometimes, up to 15 pixels get cropped at edges of the screen.
-    int  GetCanvasMarginY();     // returns the # of pixels that exist on the canvas, on each side, that the user will never see.  Mainly here for windowed mode, where sometimes, up to 15 pixels get cropped at edges of the screen.
 public:
     void ToggleFullScreen();
-    void DrawDarkTranslucentBox(RECT* pr);
 protected:
-    void RenderPlaylist();
     void StuffParams(DXCONTEXT_PARAMS *pParams);
     void EnforceMaxFPS();
 
-    // DESKTOP MODE FUNCTIONS (found in desktop_mode.cpp)
-    int  InitDesktopMode();
-    void CleanUpDesktopMode();
-    int  CreateDesktopIconTexture(IDirect3DTexture9** ppTex);
-    void DeselectDesktop();
-    void UpdateDesktopBitmaps();
-    int  StuffIconBitmaps(int iStartIconIdx, int iTexNum, int *show_msgs);
-    void RenderDesktop();
-
-    // SEPARATE TEXT WINDOW (FOR VJ MODE)
-	  int 		m_vj_mode;
-      int       m_hidden_textwnd;
-      int       m_resizing_textwnd;
-      protected:
-	   HWND		m_hTextWnd;
-      private:
-	  int		m_nTextWndWidth;
-	  int		m_nTextWndHeight;
-	  bool		m_bTextWindowClassRegistered;
-      LPDIRECT3D9 m_vjd3d9;
-      LPDIRECT3DDEVICE9 m_vjd3d9_device;
-	  //HDC		m_memDC;		// memory device context
-	  //HBITMAP m_memBM, m_oldBM;
-	  //HBRUSH  m_hBlackBrush;
-
     // WINDOWPROC FUNCTIONS
     LRESULT PluginShellWindowProc(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lParam);   // in windowproc.cpp
-    LRESULT PluginShellDesktopWndProc(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lParam);
-    LRESULT PluginShellVJModeWndProc(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lParam);
 
     // CONFIG PANEL FUNCTIONS:
     BOOL    PluginShellConfigDialogProc(HWND hwnd,UINT msg,WPARAM wParam,LPARAM lParam);
@@ -362,7 +235,7 @@ protected:
     void    SaveAdapter(int screenmode);
     void    SaveMaxFps(int screenmode);
     void    OnTabChanged(int nNewTab);
-	LPDIRECT3DDEVICE9 GetTextDevice() { return (m_vjd3d9_device) ? m_vjd3d9_device : m_lpDX->m_lpDevice; }
+	LPDIRECT3DDEVICE9 GetTextDevice() { return m_lpDX->m_lpDevice; }
 
     // CHANGES:
     friend class CShaderParams;

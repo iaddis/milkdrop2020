@@ -1,16 +1,36 @@
 #ifndef NULLSOFT_APIH
 #define NULLSOFT_APIH
 
-#include <api/service/api_service.h>
-#include "../Agave/Language/api_language.h"
-#include <api/service/waServiceFactory.h>
-#include <api/syscb/callbacks/browsercb.h>
-#include <api/syscb/callbacks/syscb.h>
-#include <api/syscb/api_syscb.h>
-extern api_syscb *WASABI_API_SYSCB;
-#define WASABI_API_SYSCB sysCallbackApi
-#include <api/application/api_application.h>
-extern api_application *applicationApi;
-#define WASABI_API_APP applicationApi
+#include <string.h>
+#include <windows.h>
+
+inline const wchar_t *WasabiStrCpy(const wchar_t *str, wchar_t *buffer, size_t bufferLen)
+{
+	wcsncpy(buffer, str, bufferLen);
+	buffer[bufferLen-1] = 0;
+	return buffer;
+}
+
+#define WASABI_API_LNGSTRINGW(__id) (L"" L#__id)
+#define WASABI_API_LNGSTRINGW_BUF(__id, __buf, __len) WasabiStrCpy(WASABI_API_LNGSTRINGW(__id), __buf, __len)
+
+class Log {
+public:
+	inline static void Print(const char *message, ...)
+	{
+		OutputDebugStringA(message);
+		OutputDebugStringA("\r\n");
+	}
+
+
+	inline static void Error(const char *message, ...)
+	{
+		OutputDebugStringA("ERROR:");
+		OutputDebugStringA(message);
+		OutputDebugStringA("\r\n");
+	//	MessageBoxW(NULL, message, message, MB_OK|MB_SETFOREGROUND|MB_TOPMOST );
+	}
+
+};
 
 #endif

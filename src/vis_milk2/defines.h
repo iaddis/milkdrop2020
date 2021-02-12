@@ -37,9 +37,9 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //   compiled to, go to Project Settings -> Link tab -> and change the
 //   'output file name'.  Don't forget to do it for both Debug AND 
 //   Release builds!
-#define SHORTNAME        "MilkDrop 2" // used as window caption for both MilkDrop and the config panel.  avoid numbers or punctuation; when 'integrate with winamp' option is enabled, these characters don't always work with all skins.
-#define LONGNAME         "MilkDrop v2.25c" // appears at bottom of config panel
-#define LONGNAMEW        L"MilkDrop v2.25c" // appears at bottom of config panel
+#define SHORTNAME        "PortableMilkDrop 2" // used as window caption for both MilkDrop and the config panel.  avoid numbers or punctuation; when 'integrate with winamp' option is enabled, these characters don't always work with all skins.
+#define LONGNAME         "PortableMilkDrop v2.25c" // appears at bottom of config panel
+#define LONGNAMEW        L"PortableMilkDrop v2.25c" // appears at bottom of config panel
 
 // INT_VERSION is the major version #, multipled by 100 (ie. version 1.02 
 // would be 102).  If the app goes to read in the INI file and sees that
@@ -87,7 +87,7 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 // ***Note that the button will be invisible (on the config panel) 
 // at runtime if this string is empty.***
-#define PLUGIN_WEB_URL  L"http://www.nullsoft.com/free/milkdrop/"   // set this to something like "http://www.myplugin.com/"    
+#define PLUGIN_WEB_URL  L"https://github.com/iaddis/milkdrop2/"   // set this to something like "http://www.myplugin.com/"    
 
 // The following two strings - AUTHOR_NAME and COPYRIGHT - will be used 
 // in a little box in the config panel, to identify the author & copyright 
@@ -100,84 +100,7 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // or applications that are running, so change this to something 
 // that will probably be unique.  For example, if your plugin was
 // called Libido, then "LibidoClass" would probably be a safe bet.
-#define CLASSNAME       L"MilkDrop2"
-
-// Here you can give names to the buttons (~tabs) along the top
-// of the config panel.  Each button, when clicked, will bring
-// up the corresponding 'property page' (embedded dialog),
-// IDD_PROPPAGE_1 through IDD_PROPPAGE_8.  If you want less than
-// 8 buttons to show up, just leave their names as blank.  For
-// full instructions on how to add a new tab/page, see
-// DOCUMENTATION.TXT.
-//#define CONFIG_PANEL_BUTTON_1 " Common Settings "	// nPage==1
-//#define CONFIG_PANEL_BUTTON_2 "  MORE SETTINGS  "	// nPage==2
-//#define CONFIG_PANEL_BUTTON_3 " Artist Tools "		// nPage==3
-//#define CONFIG_PANEL_BUTTON_4 " Transitions "		// nPage==4
-//#define CONFIG_PANEL_BUTTON_5 ""                    // nPage==5
-//#define CONFIG_PANEL_BUTTON_6 ""                    // nPage==6
-//#define CONFIG_PANEL_BUTTON_7 ""                    // nPage==7
-//#define CONFIG_PANEL_BUTTON_8 ""                    // nPage==8
-// As if 2.0e, these strings are defined in the stringtable of the dll
-// and otherwise work the same as these header defines.
-// (The equivelent of "" in these is a single space now)
-
-// adjust the defaults for the 4 built-in fonts here.
-// (note: if you want the font to be available on 98 + ME + 2k + XP, use one of the following...)
-//     arial
-//     courier 10-12-15
-//     courier new
-//     comic san[s] ms
-//     lucida console
-//     ms sans serif
-//     ms serif
-//     small fonts
-//     symbol 8-10-12-14-18-24
-//     tahoma
-//     times new roman
-//     verdana
-//     webdings
-#define SIMPLE_FONT_DEFAULT_FACE L"Courier" //"MS Sans Serif"  - changed to Courier because menus + code FAR more legible!
-#define SIMPLE_FONT_DEFAULT_SIZE 12 //16
-#define SIMPLE_FONT_DEFAULT_BOLD 0
-#define SIMPLE_FONT_DEFAULT_ITAL 0
-#define SIMPLE_FONT_DEFAULT_AA   0
-#define DECORATIVE_FONT_DEFAULT_FACE L"Times New Roman" 
-#define DECORATIVE_FONT_DEFAULT_SIZE 24
-#define DECORATIVE_FONT_DEFAULT_BOLD 0
-#define DECORATIVE_FONT_DEFAULT_ITAL 1
-#define DECORATIVE_FONT_DEFAULT_AA   1
-#define HELPSCREEN_FONT_DEFAULT_FACE L"MS Sans Serif" 
-#define HELPSCREEN_FONT_DEFAULT_SIZE 14  // NOTE: should fit on 640x480 screen!
-#define HELPSCREEN_FONT_DEFAULT_BOLD 1
-#define HELPSCREEN_FONT_DEFAULT_ITAL 0
-#define HELPSCREEN_FONT_DEFAULT_AA   0
-#define PLAYLIST_FONT_DEFAULT_FACE L"Arial" 
-#define PLAYLIST_FONT_DEFAULT_SIZE 16      
-#define PLAYLIST_FONT_DEFAULT_BOLD 0
-#define PLAYLIST_FONT_DEFAULT_ITAL 0
-#define PLAYLIST_FONT_DEFAULT_AA   0
-
-// automatically add extra fonts to the config panel 
-// by simply #defining them here, UP TO A MAX OF 5 EXTRA FONTS.
-// access the font by calling GetFont(EXTRA_1) for extra font #1,
-// GetExtraFont(EXTRA_2) for extra font #2, and so on.
-#define NUM_EXTRA_FONTS 2  // <- don't exceed 5 here!
-#define TOOLTIP_FONT EXTRA_1
-//#define EXTRA_FONT_1_NAME         "Tooltips"
-// defined in the stringtable resources now since 2.0e
-#define EXTRA_FONT_1_DEFAULT_FACE L"Arial"
-#define EXTRA_FONT_1_DEFAULT_SIZE 14        
-#define EXTRA_FONT_1_DEFAULT_BOLD 0
-#define EXTRA_FONT_1_DEFAULT_ITAL 0
-#define EXTRA_FONT_1_DEFAULT_AA   0
-#define SONGTITLE_FONT EXTRA_2
-//#define EXTRA_FONT_2_NAME         "Animated Songtitles"
-// defined in the stringtable resources now since 2.0e
-#define EXTRA_FONT_2_DEFAULT_FACE L"Times New Roman"
-#define EXTRA_FONT_2_DEFAULT_SIZE 18        
-#define EXTRA_FONT_2_DEFAULT_BOLD 0
-#define EXTRA_FONT_2_DEFAULT_ITAL 1
-#define EXTRA_FONT_2_DEFAULT_AA   1
+#define CLASSNAME       L"PortableMilkDrop2"
 
 #define WINDOWCAPTION   SHORTNAME   // the caption that will appear on the plugin window
 #define DLLDESC         LONGNAME    // the desc. of this DLL, as it appears in Winamp's list of viz plugins
@@ -199,25 +122,5 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define NUM_FREQUENCIES              512   // # of freq. samples you want *out* of the FFT, for 0-11kHz range.
                                            //   ** this must be a power of 2!
                                            //   ** the actual FFT will use twice this many frequencies **
-
-#define TEXT_MARGIN                  10    // the # of pixels of margin to leave between text and the edge of the screen
-#define PLAYLIST_INNER_MARGIN        4     // the extra margin between the playlist box and the text inside
-
-#define PLAYLIST_COLOR_PLAYING_TRACK 0xFFCCFF00 // alpha|red|green|blue
-#define PLAYLIST_COLOR_HILITE_TRACK  0xFFFF5050
-#define PLAYLIST_COLOR_BOTH          0xFFFFCC22
-#define PLAYLIST_COLOR_NORMAL        0xFFCCCCCC
-
-#define MENU_COLOR    0xFFCCCCCC
-#define MENU_HILITE_COLOR 0xFFFF4400
-#define DIR_COLOR     0xFF88CCFF
-#define TOOLTIP_COLOR 0xFFBBBBCC
-
-#define MAX_PRESETS_PER_PAGE 32
-
-//#define PRESS_F1_MSG                 "Press F1 for Help " // leave extra space @ end, so italicized fonts don't get clipped
-// defined in the stringtable resources now since 2.0e
-#define PRESS_F1_DUR                 3.0f // in seconds  
-#define PRESS_F1_EXP                 10.0f // exponent for how quickly it accelerates to leave the screen. 1 = linear; >1 = stays & then dashes off @ end
 
 #endif
