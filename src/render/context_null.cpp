@@ -217,7 +217,6 @@ public:
 	
 	
 	
-	virtual TexturePtr CreateTextureFromFile(const char *name, const char *path) override;
 	virtual TexturePtr CreateRenderTarget(const char *name, int width, int height, PixelFormat format)  override;
 	virtual TexturePtr CreateTexture(const char *name, int width, int height, PixelFormat format, const void *data) override;
 
@@ -416,11 +415,6 @@ void NullContext:: EndScene()
 	
 }
 
-TexturePtr NullContext::CreateTextureFromFile(const char *name, const char *path)
-{
-    return std::make_shared<NullTexture>(name);
-	
-}
 
 TexturePtr NullContext::CreateRenderTarget(const char *name, int width, int height, PixelFormat format)
 {

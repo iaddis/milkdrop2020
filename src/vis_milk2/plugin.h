@@ -66,7 +66,7 @@ using StringVec = std::vector<std::string>;
 class CPlugin : public IVisualizer
 {
 public:
-        CPlugin(render::ContextPtr context, IAudioAnalyzerPtr audio, std::string assetDir);
+        CPlugin(render::ContextPtr context, IAudioAnalyzerPtr audio, ITextureSetPtr texture_map, std::string assetDir);
 		virtual ~CPlugin();
 
 		// called by vis.cpp, on behalf of Winamp:
@@ -133,8 +133,7 @@ public:
 		void SetFixedShader(render::TexturePtr texture, render::SamplerAddress addr, render::SamplerFilter filter);
 
 		render::ShaderPtr			    m_shader_fixed;		// rgb = vertex.rgb * texture.rgb, a = vertex.a
-		std::vector<render::TexturePtr>  m_textures;
-		bool m_bNeedRescanTexturesDir;
+        ITextureSetPtr  m_texture_map;
 
         render::ShaderPtr                m_shader_custom_shapes;
         render::ShaderPtr                m_shader_custom_waves;
@@ -284,20 +283,11 @@ public:
 		void		Randomize();
     
 
-        virtual void   LoadPresetKernelsFromFile(std::string path, Script::mdpx::KernelCodeGenerator &cg) override;
-
-        virtual CStatePtr   LoadPresetFromFile(std::string path, std::string &errors) ;
-//        virtual std::future<CStatePtr>   LoadPresetFromFileAsync(std::string path) ;
-
-        virtual bool        IsLoadingPreset() override;
-        virtual bool        LoadPreset(std::string path, float fBlendTime, float duration)  override;
-    virtual void        LoadPresetAsync(std::string path, float fBlendTime, float duration)  override;
-    void CheckPresetLoad();
-
-        virtual bool		LoadPreset(CStatePtr preset);
+     
+        virtual PresetPtr        LoadPresetFromFile(std::string &text, std::string path, std::string name, std::string &errors)  override;
+        virtual void		SetPreset(PresetPtr preset, PresetLoadArgs args) override;
         virtual void        LoadEmptyPreset() override;
-        virtual bool TestPreset(std::string path, std::string &error) override;
-    
+     
 		bool		ReversePropagatePoint(float fx, float fy, float *fx2, float *fy2);
 		virtual int 		HandleRegularKey(char key)  override;
 
@@ -308,9 +298,12 @@ public:
 
         virtual void Draw(ContentMode mode, float alpha = 1.0f) override;
         virtual void SetOutputSize(Size2D size) override;
+        virtual render::TexturePtr GetInternalTexture() override;
         virtual render::TexturePtr GetOutputTexture() override;
         virtual render::TexturePtr GetScreenshotTexture() override;
         virtual void SetRandomSeed(uint32_t seed) override;
+    
+        virtual render::TexturePtr LookupTexture(const std::string &name);
     
         void        DrawQuad(render::TexturePtr texture, float x, float y, float w, float h, Color4F color);
 
@@ -344,13 +337,13 @@ public:
 		void        UvToMathSpace(float u, float v, float* rad, float* ang);
 		void        ApplyShaderParams(ShaderInfoPtr p, CStatePtr pState);
 		void        RestoreShaderParams();
-		bool        AddNoiseTex(const char* szTexName, int size, int zoom_factor);
-		bool        AddNoiseVol(const char* szTexName, int size, int zoom_factor);
+		void        AddNoiseTex(const char* szTexName, int size, int zoom_factor);
+    void        AddNoiseVol(const char* szTexName, int size, int zoom_factor);
 
         render::ShaderPtr LoadShaderFromFile(const char* szBaseFilename);
 
 		std::string LoadShaderCode(const char* szBaseFilename);
-        bool PickRandomTexture(const char* prefix, std::string &szRetTextureFilename); //should be MAX_PATH chars
+        bool PickRandomTexture(const std::string &prefix, std::string &szRetTextureFilename); //should be MAX_PATH chars
     
         render::TexturePtr LoadDiskTexture(const std::string &name);
         void TestLineDraw();

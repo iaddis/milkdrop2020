@@ -187,9 +187,6 @@ namespace Script
         virtual void DebugUI() = 0;
         
         
-        virtual void GenerateCPP(std::string funcName, std::ostream &o) = 0;
-        virtual void GenerateJS(std::string funcName, std::ostream &o) = 0;
-        virtual void GenerateMetal(std::string funcName, std::ostream &o) = 0;
 
     };
 

@@ -267,6 +267,14 @@ public:
         delete m_fft;
     }
     
+    virtual float GetSampleRate() override {
+        return m_samples.GetSampleRate();
+    }
+    virtual int GetBlockSize() override {
+        return (int)m_samples.size();
+    }
+
+
     void Dump(std::vector<float> &data)
     {
         for (size_t i=0; i < data.size(); i++)
@@ -286,7 +294,7 @@ public:
 
     std::string m_description;
     
-    virtual void Update(IAudioSourcePtr source, float dt) override
+    virtual void Update(IAudioSourcePtr source, float dt, float gain) override
     {
         PROFILE_FUNCTION();
 
@@ -298,6 +306,8 @@ public:
             source->ReadAudioFrame(dt, m_samples);
             m_description = source->GetDescription();
         }
+        
+        m_samples.Modulate(gain);
 
         m_sampleRate = m_samples.GetSampleRate();
         m_dt = dt;
@@ -551,8 +561,7 @@ public:
     }
 
     
-    virtual void DebugDrawUI(bool *popen) override;
-    virtual void DrawStatsUI() override;
+    virtual void DrawChannelUI(int ch) override;
 
     
     static constexpr int NUM_CHANNELS = 2;
@@ -922,114 +931,11 @@ void AudioAnalyzer::AlignWaves()
 #endif
 
 
-void AudioAnalyzer::DrawStatsUI()
+void AudioAnalyzer::DrawChannelUI(int ch)
 {
-    bool m_showStats = true;
-        #if 1
-            {
-      //          ImGui::SetNextWindowPos(ImVec2(20, 10), ImGuiCond_Always, ImVec2(0.0f, 0.0f));
-    //            ImGui::SetNextWindowContentWidth(  ImGui::GetIO().DisplaySize.x - 80);
-                if (ImGui::Begin("AudioDisplay", &m_showStats, 0
-                                 | ImGuiWindowFlags_NoMove
-                                 | ImGuiWindowFlags_NoDecoration
-                                 |  ImGuiWindowFlags_NoTitleBar
-                                 //                         | ImGuiWindowFlags_NoResize
-                                 | ImGuiWindowFlags_NoScrollbar
-                                 | ImGuiWindowFlags_AlwaysAutoResize
-                                 | ImGuiWindowFlags_NoSavedSettings
-                                 | ImGuiWindowFlags_NoFocusOnAppearing
-                                 | ImGuiWindowFlags_NoNav
-                                 ))
-                {
-
-                    if (!m_description.empty())
-                        ImGui::Text("%s\n", m_description.c_str());
-
-                    ImGui::Text("%.fhz %.1fms\n", m_samples.GetSampleRate(), m_dt * 1000.0f);
-
-
-                    {
-
-
-                        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.2f,.2f,0.2f,.2f));
-                        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.2f,.2f,0.2f,.2f));
-
-                        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.2f,1.0f,0.2f,1.0f));
-
-
-
-                        float h = 120;
-//                        std::string buffer = StringFormat("%.fhz %.1fms", m_samples.GetSampleRate(), m_dt * 1000.0f);
-                        ImGui::PlotHistogram("",
-                                      [this](int idx) {
-                                        const auto &sample = m_samples[idx];
-                                        return sample.ch[0] + sample.ch[1];
-                                    },
-                                      (int)m_samples.size(), 0,
-                                      "", // buffer.c_str(),
-                                      -1.0f, 1.0f,
-                                      ImVec2(256, h)
-                                    );
-                        ImGui::PopStyleColor();
-
-                        ImGui::SameLine();
-
-                        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.2f,1.0f,0.2f,1.0f));
-                        auto channel = m_channel[0];
-                             int numSamples = (int)(channel.fSpectrum.size()) / 2;
-                             float spec_width = 256;
-                             ImGui::PlotHistogram("",
-                                           channel.fSpectrum.data(),
-                                           numSamples, 0,
-                                           "", 0.0f, 8.0f,
-                                           ImVec2(spec_width, h)
-                                           );
-                        ImGui::PopStyleColor();
-
-                        ImGui::PopStyleColor(2);
-                    }
-                    
-                }
-                ImGui::End();
-                
-            }
-        #endif
-
-
-}
-
-void AudioAnalyzer::DebugDrawUI(bool *popen)
-{
+    if (ch >= NUM_CHANNELS) return;
     
-#if 1
-    if (!*popen)
-        return;
-
-    ImGui::SetNextWindowPos( ImVec2(20, 400), ImGuiCond_Once);
-
-//    ImGui::SetNextWindowContentWidth(900);
-    if (!ImGui::Begin("Audio Analyzer",popen,0
-//                      | ImGuiWindowFlags_NoMovep
-//                      | ImGuiWindowFlags_NoDecoration
-//                      |  ImGuiWindowFlags_NoTitleBar
-                      //                         | ImGuiWindowFlags_NoResize
-                      | ImGuiWindowFlags_NoScrollbar
-                      | ImGuiWindowFlags_AlwaysAutoResize
-//                      | ImGuiWindowFlags_NoSavedSettings
-//                      | ImGuiWindowFlags_NoFocusOnAppearing
-//                      | ImGuiWindowFlags_NoNav
-
-                      )) {
-        ImGui::End();
-        return;
-    }
-
-        
-    ImGui::Text("%s\n", m_description.c_str());
-
-    ImGui::Text("SampleRate: %.1fhz samples:%d\n", m_sampleRate, (int)m_samples.size() );
-    
-    for (int ch=0; ch < NUM_CHANNELS; ch++)
+//    for (int ch=0; ch < NUM_CHANNELS; ch++)
     {
    //     const auto &wfd = fWaveform[ch];
         
@@ -1041,10 +947,8 @@ void AudioAnalyzer::DebugDrawUI(bool *popen)
 
         const char *name = channel.name.c_str();
        
-        float w = 16.0f;
-        float h = 120;
         float scale = 8;
-        
+        float h = 120;
         
         ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.2f,1.0f,0.2f,1.0f));
 //            ImGui::PlotHistogram("", wfd.data(), (int)wfd.size(), 0, "waveform", -128.0f, 128.0f, ImVec2(256, 120));
@@ -1078,8 +982,8 @@ void AudioAnalyzer::DebugDrawUI(bool *popen)
         
         
 
-        int numSamples = (int)(channel.fSpectrum.size());
-        float spec_width = 512;
+        int numSamples = (int)(channel.fSpectrum.size()) / 2;
+        float spec_width = 256;
         ImGui::PlotHistogram("",
                       channel.fSpectrum.data(),
                       numSamples, 0,
@@ -1121,6 +1025,10 @@ void AudioAnalyzer::DebugDrawUI(bool *popen)
             data[3][i] = channel.bands[i].long_avg;
         }
         
+        
+        
+         float w = 20.0f;
+       
         
         ImGui::SameLine();
         ImGui::PlotHistogram("", data[0], count, 0, "imm", 0.0f, scale, ImVec2(count * w, h));
@@ -1185,11 +1093,6 @@ void AudioAnalyzer::DebugDrawUI(bool *popen)
     }
 
 
-    
-//        ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
 
-    ImGui::End();
-
-    
-#endif
 }
+

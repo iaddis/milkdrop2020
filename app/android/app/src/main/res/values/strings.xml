@@ -5,7 +5,7 @@
 
 <resources>
     <!-- Simple strings. -->
-    <string name="app_name">MilkDrop2Android</string>
+    <string name="app_name">m1lkdr0p</string>
 
     <string name="NeedRecordAudioPermission">"This app needs RECORD_AUDIO permission"</string>
 

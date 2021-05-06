@@ -242,23 +242,26 @@ namespace Expressions
     class Repeat : public Expression
     {
     public:
-        Repeat(ExpressionPtr test, ExpressionPtr expr)
-        : Expression(EFN_REPEAT), m_test(test), m_expr(expr)
+        Repeat(ExpressionPtr count_expr, ExpressionPtr expr)
+        : Expression(EFN_REPEAT), m_count(count_expr), m_expr(expr)
         {
             mark_read(expr);
         }
         
         virtual ~Repeat()
         {
-            delete_expr(m_test);
+            delete_expr(m_count);
             delete_expr(m_expr);
         }
 
         
         virtual ValueType Evaluate(EvalContext ec) override
         {
+            int count = (int)m_count->Evaluate(ec);
+            
             ValueType result = 0;
-            while (evaluate_as_boolean(ec, m_test))
+            //while (evaluate_as_boolean(ec, m_test))
+            for (int i=0; i < count; i++)
             {
                 result = evaluate(ec, m_expr);
             }
@@ -269,7 +272,7 @@ namespace Expressions
         virtual void Print(std::ostream &o) override
         {
             o << "loop(";
-            o << m_test;
+            o << m_count;
             o << ",";
             o << m_expr;
             o << ")";
@@ -277,7 +280,7 @@ namespace Expressions
         
         virtual bool IsStatement() override {return true;}
     protected:
-        ExpressionPtr m_test;
+        ExpressionPtr m_count;
         ExpressionPtr m_expr;
     };
     
@@ -339,6 +342,34 @@ namespace Expressions
         ExpressionPtr m_ifthen;
         ExpressionPtr m_ifelse;
     };
+
+
+class InvalidExpression: public Expression
+{
+
+public:
+    InvalidExpression(FuncType efn)
+    : Expression(efn)
+    {
+    }
+    
+    virtual ~InvalidExpression()
+    {
+    }
+
+    
+    virtual ValueType Evaluate(EvalContext ec) override
+    {
+        return 0;
+        
+    }
+    
+    virtual void Print(std::ostream &o) override
+    {
+        o << "invalid_operation()";
+    }
+};
+
     
     class UnaryExpression : public Expression
     {
@@ -745,7 +776,65 @@ namespace Expressions
         ExpressionPtr   m_right;
     };
     
+
+template<OpFunc2 TFunc>
+class AssignExpressionBinaryOp : public Expression
+{
+public:
+    AssignExpressionBinaryOp(FuncType fn, ExpressionPtr left, ExpressionPtr right)
+    : Expression(fn), m_left(left), m_right(right)
+    {
+        mark_read(left);
+        mark_read(right);
+        mark_written(left);
+    }
     
+    virtual ~AssignExpressionBinaryOp()
+    {
+        delete_expr(m_left);
+        delete_expr(m_right);
+    }
+
+    
+    
+    virtual ValueType Evaluate(EvalContext ec) override
+    {
+        ValueType left = evaluate(ec, m_left);
+        ValueType right = evaluate(ec, m_right);
+        ValueType result =  TFunc(left, right);
+        
+        m_left->AssignTo(ec, result );
+        return result;
+    }
+    
+    virtual void Print(std::ostream &o) override
+    {
+
+         switch (GetType())
+        {
+            case EFN_INVSQRT:
+            case FN_DIVIDE:
+                if (check_nan(m_right))
+                    o.setf(FLAG_CHECK_NAN);
+                break;
+        }
+        
+        o << GetFnName();
+        o << "(";
+        o << m_left;
+        o << ",";
+        o << m_right;
+        o << ")";
+    }
+    
+    
+protected:
+    ExpressionPtr     m_left;
+    ExpressionPtr   m_right;
+};
+
+
+
     
     class LogicalAnd : public BinaryExpression
     {
@@ -930,6 +1019,12 @@ namespace Expressions
             return m_register->GetValue(ec);
         }
         
+        virtual bool AssignTo(EvalContext ec, ValueType value) override
+        {
+            m_register->SetValueChecked(ec, value);
+            return true;
+        }
+        
         virtual void Print(std::ostream &o) override
         {
             o << m_register;
@@ -945,6 +1040,315 @@ namespace Expressions
 
     
    };
+
+
+    static int EvalIndex(EvalContext ec, ExpressionPtr index)
+    {
+        ValueType value = index->Evaluate(ec);
+        if (value < 0) return 0;
+        return (int)std::floor(value);
+    }
+
+
+
+
+class Megabuffer
+{
+    int _capacity;
+    int _bankShift;
+    int _bankSize;
+    int _bankCount;
+    
+    // vector of banks of bankSize
+    std::vector< std::vector<ValueType> > _data;
+    
+    std::mutex _mutex;
+    
+public:
+    Megabuffer(int capacity, int bankShift)
+    :_capacity(capacity), _bankShift(bankShift)
+    {
+        _bankSize = 1 << _bankShift;
+        _bankCount = _capacity >> _bankShift;
+        
+        _data.resize(_bankCount);
+    }
+    
+    virtual ~Megabuffer()
+    {
+       
+    }
+    
+    void Clear()
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        _data.clear();
+        _data.resize(_bankCount);
+    }
+    
+    ValueType Read(int addr)
+    {
+        addr &= (_capacity - 1);
+        int bank = addr >> _bankShift;
+        int offset = addr & (_bankSize - 1);
+
+        if (bank >= _data.size()) {
+            return 0;
+        }
+
+        std::lock_guard<std::mutex> lock(_mutex);
+
+        const auto &v = _data[bank];
+        if (v.empty()) return 0;
+        
+        return v[offset];
+    }
+    
+    void Write(int addr, ValueType value)
+    {
+        addr &= (_capacity - 1);
+        int bank = addr >> _bankShift;
+        int offset = addr & (_bankSize - 1);
+
+        if (bank >= _data.size()) {
+            return;
+        }
+        
+        std::lock_guard<std::mutex> lock(_mutex);
+        
+        auto &v = _data[bank];
+        if (v.empty()) {
+            v.resize(_bankSize);
+        }
+        
+        // store value
+        v[offset] = value;
+    }
+    
+};
+
+//
+//static ValueType s__GMegaBuf[SHARED_GRAM_SIZE];
+//static ValueType s__MegaBuf[SHARED_RAM_SIZE];
+
+
+static constexpr int SHARED_GRAM_SIZE = (1<<20);
+static constexpr int SHARED_RAM_SIZE = (128 * 64 * 1024);
+
+
+static Megabuffer s__GMegaBuf {SHARED_GRAM_SIZE, 10 };
+static Megabuffer s__MegaBuf {SHARED_RAM_SIZE, 13 };
+
+
+
+
+
+static ValueType ReadGMegaBuf(int addr)
+{
+    return s__GMegaBuf.Read(addr);
+}
+
+static void WriteGMegaBuf(int addr, ValueType v)
+{
+    s__GMegaBuf.Write(addr, v);
+}
+
+static ValueType ReadMegaBuf(int addr)
+{
+    return s__MegaBuf.Read(addr);
+}
+
+static void WriteMegaBuf(int addr, ValueType v)
+{
+    s__MegaBuf.Write(addr, v);
+}
+
+
+    class Megabuf: public Expression
+    {
+        ExpressionPtr m_index;
+
+    public:
+        Megabuf(ExpressionPtr index)
+        : Expression(EFN_MEM), m_index(index)
+        {
+        }
+        
+        
+        virtual ~Megabuf()
+        {
+            delete_expr(m_index);
+        }
+
+        
+        virtual ValueType Evaluate(EvalContext ec) override
+        {
+            int index = EvalIndex(ec, m_index);
+            index &= SHARED_RAM_SIZE - 1;
+
+            // not thread or context safe
+            return ReadMegaBuf(index);
+        }
+        
+        virtual bool AssignTo(EvalContext ec, ValueType value) override
+        {
+            int index = EvalIndex(ec, m_index);
+            index &= SHARED_RAM_SIZE - 1;
+
+            // not thread or context safe
+            WriteMegaBuf(index, value);
+            return true;
+        }
+        
+        virtual void Print(std::ostream &o) override
+        {
+            o << "megabuf(" << m_index << ")";
+        }
+    };
+
+    class GMegabuf: public Expression
+    {
+        ExpressionPtr m_index;
+
+    public:
+        GMegabuf(ExpressionPtr index)
+        : Expression(EFN_GMEM), m_index(index)
+        {
+        }
+        
+        virtual ~GMegabuf()
+        {
+            delete_expr(m_index);
+        }
+
+
+        virtual ValueType Evaluate(EvalContext ec) override
+        {
+            int index = EvalIndex(ec, m_index);
+            index &= SHARED_GRAM_SIZE - 1;
+
+            // not thread or context safe
+            return ReadGMegaBuf(index);
+            
+        }
+
+        virtual bool AssignTo(EvalContext ec, ValueType value) override
+        {
+            int index = EvalIndex(ec, m_index);
+            index &= SHARED_GRAM_SIZE - 1;
+
+            // not thread or context safe
+            WriteGMegaBuf(index, value);
+            return value;
+        }
+        
+
+        virtual void Print(std::ostream &o) override
+        {
+            o << "gmegabuf(" << m_index << ")";
+        }
+    };
+
+
+    class Exec2Expression: public Expression
+    {
+        ExpressionPtr m_arg0;
+        ExpressionPtr m_arg1;
+
+    public:
+        Exec2Expression(ExpressionPtr arg0, ExpressionPtr arg1)
+        : Expression(EFN_EXEC2), m_arg0(arg0), m_arg1(arg1)
+        {
+        }
+        
+        virtual ~Exec2Expression()
+        {
+            delete_expr(m_arg0);
+            delete_expr(m_arg1);
+        }
+
+        
+        virtual ValueType Evaluate(EvalContext ec) override
+        {
+            m_arg0->Evaluate(ec);
+            return m_arg1->Evaluate(ec); // i guess we just return the last one here...
+            
+        }
+        
+        virtual void Print(std::ostream &o) override
+        {
+            o << "exec2(" << m_arg0 << "," << m_arg1 << ")";
+        }
+    };
+
+
+    class Exec3Expression: public Expression
+    {
+        ExpressionPtr m_arg0;
+        ExpressionPtr m_arg1;
+        ExpressionPtr m_arg2;
+
+    public:
+        Exec3Expression(ExpressionPtr arg0, ExpressionPtr arg1, ExpressionPtr arg2)
+        : Expression(EFN_EXEC3), m_arg0(arg0), m_arg1(arg1), m_arg2(arg2)
+        {
+        }
+        
+        virtual ~Exec3Expression()
+        {
+            delete_expr(m_arg0);
+            delete_expr(m_arg1);
+            delete_expr(m_arg2);
+        }
+
+
+        
+        virtual ValueType Evaluate(EvalContext ec) override
+        {
+            m_arg0->Evaluate(ec);
+            m_arg1->Evaluate(ec);
+            return m_arg2->Evaluate(ec); // i guess we just return the last one here...
+        }
+        
+        virtual void Print(std::ostream &o) override
+        {
+            o << "exec3(" << m_arg0 << "," << m_arg1 << "," << m_arg2 << ")";
+        }
+    };
+
+
+    class AssignmentExpression: public Expression
+    {
+        ExpressionPtr m_lhs;
+        ExpressionPtr m_rhs;
+
+    public:
+        AssignmentExpression(ExpressionPtr lhs, ExpressionPtr rhs)
+        : Expression(EFN_REGISTER_ASSIGNMENT), m_lhs(lhs), m_rhs(rhs)
+        {
+        }
+        
+        virtual ~AssignmentExpression()
+        {
+            delete_expr(m_lhs);
+            delete_expr(m_rhs);
+        }
+
+        
+        virtual ValueType Evaluate(EvalContext ec) override
+        {
+            ValueType value = m_rhs->Evaluate(ec); // i guess we just return the last one here...
+            m_lhs->AssignTo(ec, value);
+            return value;
+        }
+        
+        virtual void Print(std::ostream &o) override
+        {
+            o << "fn_assign(" << m_lhs << "," << m_rhs << ")";
+        }
+    };
+
+
 
 
 
@@ -1037,9 +1441,7 @@ namespace Expressions
                 delete_expr(left);
                 return NewExpr< AssignBinaryOp<TFunc> >(fn, v, right );
             } else {
-                assert(0);
-                return nullptr;
-//                return MakeBinaryOp<TFunc>(fn, left, right );
+                return NewExpr< AssignExpressionBinaryOp<TFunc> >(fn, left, right);
             }
         }
         
@@ -1172,9 +1574,7 @@ namespace Expressions
             }
             else
             {
-                assert(0);
-                return nullptr;
-//                return NewExpr<Assign>(lhs, a0);
+                return NewExpr< AssignmentExpression >(lhs, a0);
             }
         }
 
@@ -1433,18 +1833,22 @@ namespace Expressions
                 case EFN_ASSERT_EQUALS:
                     return MakeFunc<fn_assert_equals>(fn, code1, code2);
                 case EFN_EXEC2:
+                    return NewExpr<Exec2Expression>(code1, code2);
+                    
                 case EFN_EXEC3:
+                    return NewExpr<Exec3Expression>(code1, code2, code3);
+
                 case EFN_MEM:
+                    return NewExpr<Megabuf>(code1);
+
                 case EFN_GMEM:
+                    return NewExpr<GMegabuf>(code1);
+                    
                 case EFN_FREEMBUF:
                 case EFN_MEMCPY:
                 case EFN_MEMSET:
-                    assert(0);
-                    break;
-                    
                 default:
-                    assert(0);
-                    break;
+                    return NewExpr<InvalidExpression>(fn);
             }
             
             assert(0);

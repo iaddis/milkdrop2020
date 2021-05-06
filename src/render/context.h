@@ -9,6 +9,7 @@
 #include <sstream>
 #include <functional>
 #include "common.h"
+#include "ImageReader.h"
 
 namespace render {
 
@@ -333,7 +334,6 @@ public:
     
     virtual bool IsThreaded() { return false; }
 
-	virtual TexturePtr CreateTextureFromFile(const char *name, const char *path) = 0;
 	virtual TexturePtr CreateRenderTarget(const char *name, int width, int height, PixelFormat format) = 0;
 	virtual TexturePtr CreateTexture(const char *name, int width, int height, PixelFormat format, const void *data) = 0;
 	virtual ShaderPtr  CreateShader(const char *name) = 0;
@@ -409,6 +409,26 @@ public:
     }
     
     virtual bool IsSupported(PixelFormat format) { return false; }
+
+    TexturePtr CreateTextureFromFileInMemory(const char *name, const uint8_t *data, size_t size)
+    {
+        ImageDataPtr image = ImageLoadFromFileInMemory(data, size);
+        if (!image) {
+            return nullptr;
+        }
+        
+        return CreateTexture(name, image->width, image->height, image->format, image->data);
+    }
+
+    TexturePtr CreateTextureFromFile(const char *name, const char *path)
+    {
+        ImageDataPtr image = ImageLoadFromFile(path);
+        if (!image) {
+            return nullptr;
+        }
+        
+        return CreateTexture(name, image->width, image->height, image->format, image->data);
+    }
 
 
 protected:

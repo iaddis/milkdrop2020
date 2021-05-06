@@ -356,6 +356,12 @@ TMslOutputTraverser::TMslOutputTraverser(TInfoSink& i, std::vector<MslFunction*>
 	global = new MslFunction( "__global__", "__global__", EgstVoid, EbpUndefined, "", oneSourceLoc);
 	functionList.push_back(global);
 	current = global;
+    
+    _deferred_init = new MslFunction( "__deferred_init__", "__deferred_init__", EgstVoid, EbpUndefined, "", oneSourceLoc);
+    _deferred_init->beginBlock(false);
+    
+    functionList.push_back(_deferred_init);
+
 }
 
 
@@ -406,10 +412,12 @@ void TMslOutputTraverser::traverseArrayDeclarationWithInit(TIntermDeclaration* d
 		}
 		
 		unsigned n_vals = init.size();
-		for (unsigned i = 0; i != n_vals; ++i) {
+        int array_index = 0;
+		for (unsigned i = 0; i < n_vals; ) {
 			current->beginStatement();
 			sym->traverse(this);
-			(*out) << "[" << i << "] = ";
+			(*out) << "[" << array_index << "] = ";
+            array_index++;
 			EMslSymbolType init_type = translateType(init[i]->getAsTyped()->getTypePointer());
 
 			bool diffTypes = (symbol_type != init_type);
@@ -417,8 +425,23 @@ void TMslOutputTraverser::traverseArrayDeclarationWithInit(TIntermDeclaration* d
 				writeType (*out, symbol_type, NULL, EbpUndefined);
 				(*out) << "(";
 			}
-			init[i]->traverse(this);
-			if (diffTypes) {
+            
+            int numElements = 1;
+            if (symbol_type == EgstFloat4 && init_type == EgstFloat)
+            {
+                // handle float aggregate for float4 init
+                numElements = 4;
+            }
+
+            for (int j=0; j < numElements && i < n_vals; j++)
+            {
+                if (j > 0)
+                    (*out) << ",";
+                init[i++]->traverse(this);
+            }
+            
+
+            if (diffTypes) {
 				(*out) << ")";
 			}
 			current->endStatement();
@@ -536,15 +559,13 @@ bool TMslOutputTraverser::traverseDeclaration(bool preVisit, TIntermDeclaration*
 			// then emit initialization for later until main().
 			if (type.getQualifier() != EvqUniform)
 			{
-				std::stringstream* oldOut = &out;
-				current->pushDepth(0);
-				current->setActiveOutput(&goit->m_DeferredMatrixInit);
-
-				decl->getDeclaration()->traverse(goit);
-				goit->m_DeferredMatrixInit << ";\n";
-
-				current->setActiveOutput(oldOut);
-				current->popDepth();
+                goit->current = goit->_deferred_init;
+                
+                goit->current->beginStatement();
+                decl->getDeclaration()->traverse(goit);
+                goit->current->endStatement();
+                
+                goit->current = current;
 			}
 		}
 	}
@@ -767,10 +788,10 @@ bool TMslOutputTraverser::traverseBinary( bool preVisit, TIntermBinary *node, TI
 			 if (right->getAsConstant())
 			 {
 				 current->addLibFunction (EOpMatrixIndex);
-				 TString opName = "xll_matrixindex_";
-				 left->getType().buildMangledName(opName);
-				 opName += "_";
-				 right->getType().buildMangledName(opName);
+				 TString opName = "xll_matrixindex";
+//				 left->getType().buildMangledName(opName);
+//				 opName += "_";
+//				 right->getType().buildMangledName(opName);
 				 out << opName << " (";
 				 left->traverse(goit);
 				 out << ", ";
@@ -783,10 +804,10 @@ bool TMslOutputTraverser::traverseBinary( bool preVisit, TIntermBinary *node, TI
 				 current->addLibFunction (EOpTranspose);
 				 current->addLibFunction (EOpMatrixIndex);
 				 current->addLibFunction (EOpMatrixIndexDynamic);
-				 TString opName = "xll_matrixindexdynamic_";
-				 left->getType().buildMangledName(opName);
-				 opName += "_";
-				 right->getType().buildMangledName(opName);
+				 TString opName = "xll_matrixindexdynamic";
+//				 left->getType().buildMangledName(opName);
+//				 opName += "_";
+//				 right->getType().buildMangledName(opName);
 				 out << opName << " (";
 				 left->traverse(goit);
 				 out << ", ";
@@ -834,10 +855,10 @@ bool TMslOutputTraverser::traverseBinary( bool preVisit, TIntermBinary *node, TI
 		  if (right->getAsConstant())
 		  {
 			  current->addLibFunction (EOpMatrixIndex);
-			  TString opName = "xll_matrixindex_";
-			  left->getType().buildMangledName(opName);
-			  opName += "_";
-			  right->getType().buildMangledName(opName);
+			  TString opName = "xll_matrixindex";
+//			  left->getType().buildMangledName(opName);
+//			  opName += "_";
+//			  right->getType().buildMangledName(opName);
 			  out << opName << " (";
 			  left->traverse(goit);
 			  out << ", ";
@@ -850,10 +871,10 @@ bool TMslOutputTraverser::traverseBinary( bool preVisit, TIntermBinary *node, TI
 			  current->addLibFunction (EOpTranspose);
 			  current->addLibFunction (EOpMatrixIndex);
 			  current->addLibFunction (EOpMatrixIndexDynamic);
-			  TString opName = "xll_matrixindexdynamic_";
-			  left->getType().buildMangledName(opName);
-			  opName += "_";
-			  right->getType().buildMangledName(opName);
+			  TString opName = "xll_matrixindexdynamic";
+//			  left->getType().buildMangledName(opName);
+//			  opName += "_";
+//			  right->getType().buildMangledName(opName);
 			  out << opName << " (";
 			  left->traverse(goit);
 			  out << ", ";

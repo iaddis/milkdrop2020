@@ -5,7 +5,6 @@
 #include "audio/IAudioSource.h"
 #include "vis_milk2/IAudioAnalyzer.h"
 #include "script/script.h"
-#include "script/mdp-eel2/script-codegenerator.h"
 #include <future>
 
 
@@ -18,12 +17,40 @@ enum class ContentMode
 };
 
 
+class CState;
+using Preset = CState;
+using PresetPtr = std::shared_ptr<Preset>;
+
+
+struct PresetLoadArgs
+{
+    float blendTime = 0.0f;
+    float duration  = 10.0f;
+    bool  addToHistory = false;
+};
+
+
+class ITextureSet
+{
+public:
+    virtual ~ITextureSet() = default;
+    
+    virtual render::TexturePtr LookupTexture(const std::string &name) = 0;
+    virtual void AddTexture(const std::string &name, render::TexturePtr texture) = 0;
+    virtual void GetTextureListWithPrefix(const std::string &prefix, std::vector<render::TexturePtr> &list) = 0;
+    virtual void ShowUI() = 0;
+
+};
+using ITextureSetPtr = std::shared_ptr<ITextureSet>;
+
+
 class IVisualizer
 {
 public:
-    virtual ~IVisualizer() {}
+    virtual ~IVisualizer() = default;
     virtual void Draw(ContentMode mode, float alpha = 1.0f) =0;
     virtual void SetOutputSize(Size2D size) = 0;
+    virtual render::TexturePtr GetInternalTexture() = 0;
     virtual render::TexturePtr GetOutputTexture() =0;
     virtual render::TexturePtr GetScreenshotTexture() =0;
 
@@ -36,24 +63,21 @@ public:
     virtual void SetRandomSeed(uint32_t seed) = 0;
     
     
-    virtual bool        IsLoadingPreset() = 0;
-    virtual bool        LoadPreset(std::string path, float fBlendTime, float duration)  = 0;
-    virtual void        LoadPresetAsync(std::string path, float fBlendTime, float duration)  = 0;
+
+    virtual PresetPtr   LoadPresetFromFile(std::string &text, std::string path, std::string name, std::string &errors)  = 0;
+    virtual void        SetPreset(PresetPtr preset, PresetLoadArgs args) = 0;
     
     virtual void        LoadEmptyPreset() = 0;
-    virtual void        LoadPresetKernelsFromFile(std::string path, Script::mdpx::KernelCodeGenerator &cg) = 0;
-
+  
 
     virtual const std::string &GetPresetName() = 0;
     virtual float GetPresetProgress() = 0;
-    virtual bool TestPreset(std::string path, std::string &error) = 0;
-    
+   
     virtual void ShowPresetEditor() = 0;
     virtual void ShowPresetDebugger() = 0;
-
 };
 
 using IVisualizerPtr = std::shared_ptr<IVisualizer>;
 
 
-IVisualizerPtr CreateVisualizer(render::ContextPtr context, IAudioAnalyzerPtr audio, std::string pluginDir);
+IVisualizerPtr CreateVisualizer(render::ContextPtr context, IAudioAnalyzerPtr audio, ITextureSetPtr texture_map, std::string pluginDir);

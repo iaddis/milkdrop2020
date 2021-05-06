@@ -20,8 +20,6 @@ extern void     ImGuiSupport_Render();
 
 namespace ImGui
 {
-    void TextColumn(const char *format, ...);
-
     template<typename T>
     inline bool RadioButtonT(const char* label, T* v, T v_button)
     {

@@ -877,7 +877,7 @@ bool HlslLinker::buildFunctionLists(HlslCrossCompiler* comp, EShLanguage lang, c
 {
 	// build the list of functions
 	std::vector<GlslFunction*> &fl = comp->functionList;
-	
+    GlslFunction *funcDeferredInit = nullptr;
 	for (std::vector<GlslFunction*>::iterator fit = fl.begin(); fit < fl.end(); ++fit)
 	{
 		if ((*fit)->isGlobalScopeFunction())
@@ -897,6 +897,12 @@ bool HlslLinker::buildFunctionLists(HlslCrossCompiler* comp, EShLanguage lang, c
 			}
 			funcMain = *fit;
 		}
+        
+        if ((*fit)->getName() == "__deferred_init__")
+        {
+            funcDeferredInit = *fit;
+        }
+
 	}
 	
 	// check to ensure that we found the entry function
@@ -909,6 +915,11 @@ bool HlslLinker::buildFunctionLists(HlslCrossCompiler* comp, EShLanguage lang, c
 	//add all the called functions to the list
 	std::vector<GlslFunction*> functionsToSort;
 	functionsToSort.push_back (funcMain);
+    if (funcDeferredInit)
+    {
+        funcDeferredInit->endBlock();
+        functionsToSort.push_back(funcDeferredInit);
+    }
 	if (!addCalledFunctions (funcMain, functionsToSort, functionList))
 		infoSink.info << "Failed to resolve all called functions in the " << kShaderTypeNames[lang] << " shader\n";
 

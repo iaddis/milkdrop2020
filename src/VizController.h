@@ -27,12 +27,17 @@ struct PresetTestResult
 
 using PresetTestResultPtr = std::shared_ptr<PresetTestResult>;
 
+class PresetGroup;
+using PresetGroupPtr = std::shared_ptr<PresetGroup>;
+
+
 class PresetInfo
 {
 public:
     PresetInfo(std::string path, std::string name)
-    : Path(path), Name(name)
+    : Path(path), Name(name), ShortName(PathGetFileName(name))
     {
+        
         SortKey = Name;
         for (int i=0; i < SortKey.size(); i++)
         {
@@ -40,11 +45,13 @@ public:
         }
     }
     
+    const std::string     ShortName;
     const std::string     Name;
     const std::string     Path;
     std::string           SortKey;
    // std::string             NameWithIndex;
     
+    std::string           PresetText;       // text content of preset (if preloaded as text)
 
     PresetTestResultPtr  TestResult;        // test result if testing has been completed
     
@@ -57,6 +64,25 @@ public:
 
 using PresetInfoPtr = std::shared_ptr<PresetInfo>;
 
+class PresetGroup;
+using PresetGroupPtr = std::shared_ptr<PresetGroup>;
+
+class PresetGroup
+{
+public:
+    std::string Name;
+
+    std::weak_ptr<PresetGroup> Parent;
+    
+    std::vector< PresetGroupPtr > ChildGroups;
+
+    std::vector< PresetInfoPtr > Presets;
+};
+
+
+
+
+
 class VizController
 {
 public:
@@ -67,42 +93,46 @@ public:
     virtual bool ShouldQuit() { return m_shouldQuit; }
 
 	virtual void OpenInputAudioFile(const char *path);
-    virtual void AddAudioSource(IAudioSourcePtr source);
-    virtual IAudioSourcePtr GetAudioSource(int index)
-    { return m_audioSourceList[index];}
-    virtual void SelectAudioSource(IAudioSourcePtr source) { m_audioSource = source; }
+    virtual void SetMicrophoneAudioSource(IAudioSourcePtr source)
+    {
+        m_audio_microphone = source;
+    }
+    
 	virtual void Render(int screenId, int screenCount, float dt = (1.0f / 60.0f) );
     virtual void RenderFrame(float dt);
 
 
 	virtual void AddPresetsFromDir(const char *dir, bool recurse);
-//    virtual int GetPresetIndex(PresetInfoPtr preset);
+    virtual void AddPresetsFromArchive(std::string archivePath);
+    virtual void AddPreset(std::string path, std::string name, std::string presetText);
+
+    virtual PresetGroupPtr AddPresetGroup(std::string name);
+
     virtual void SelectEmptyPreset();
-//	virtual void SelectPreset(int index, bool blend);
-    virtual void SelectPreset(PresetInfoPtr preset, bool blend);
     virtual bool SelectPreset(const std::string &name);
-    virtual void LoadPreset(PresetInfoPtr preset, bool blend, bool addToHistory);
-	virtual void SelectNextPreset(bool blend);
-	virtual void SelectPrevPreset(bool blend);
-    virtual bool SelectPlaylistPreset(int index, bool blend);
-    virtual void SelectRandomPreset();
     
+    virtual void SetPreset(PresetInfoPtr presetInfo, PresetPtr preset, PresetLoadArgs args);
+    
+    virtual bool LoadPreset(PresetInfoPtr presetInfo, PresetLoadArgs args);
+    virtual bool LoadPreset(PresetInfoPtr presetInfo, bool blend, bool addToHistory, bool async);
+    virtual void LoadPresetAsync(PresetInfoPtr presetInfo, PresetLoadArgs args);
+
     void AddToPlaylist();
     
     virtual void RenderToScreenshot(PresetInfoPtr preset,  Size2D size, int frameCount);
-    virtual render::ImageDataPtr RenderToImageBuffer(std::string presetPath, Size2D size, int frameCount);
+    virtual render::ImageDataPtr RenderToImageBuffer(PresetInfoPtr preset, Size2D size, int frameCount);
 
     virtual void CheckDeterminism(PresetInfoPtr preset);
 
 
-    virtual void NavigateHistoryPrevious();
-    virtual void NavigateHistoryNext();
-    virtual void NavigateForward();
+    virtual void NavigatePrevious();
+    virtual void NavigateNext();
+    virtual void NavigateRandom();
     
     virtual void SingleStep();
     virtual void TogglePause();
     
-    virtual void ToggleDebugMenu();
+    virtual void ToggleSettingsMenu();
     virtual void ToggleControlsMenu();
 
     virtual bool OnKeyDown(KeyEvent key);
@@ -113,28 +143,39 @@ public:
     void TestAllPresets(std::function<void (std::string name, std::string error)> callback);
     
     
+    virtual void LoadSettings();
+    virtual void SaveSettings();
+    
     void SetSelectionLock(bool lock) { m_selectionLocked = lock;}
     
     
     virtual void DrawDebugUI();
-    virtual void AddCustomDebugMenu( std::function< void ()> func ) { m_customDebugMenus.push_back(func);}
 
     void OnTestingComplete();
     
-    void GeneratePresetCPPCode();
     void DrawTitleWindow();
     void DrawControlsWindow();
-    void DrawStatusWindow();
+    void DrawSettingsWindow();
+    void DrawStatusTable();
+    void DrawSettingsTabs();
     void DrawPresetSelector();
     void DrawPresetPlaylist();
+
     
+    void DrawPanel_About();
+    void DrawPanel_Video();
+    void DrawPanel_History();
+    void DrawPanel_Presets();
+    void DrawPanel_Audio();
+    void DrawPanel_Log();
+
     void BlacklistCurrentPreset();
 
 
     void RenderNextScreenshot();
     void CaptureAllScreenshots(bool overwriteExisting);
     
-    PresetTestResultPtr CaptureTestResult();
+    virtual void CaptureTestResult(PresetTestResult &result);
     virtual void CaptureScreenshot();
     
     virtual void CaptureScreenshot(std::string path);
@@ -162,44 +203,63 @@ public:
     render::TexturePtr          m_screenshotTexture;
 	std::string                 m_assetDir;
     std::string                 m_userDir;
+    std::string                 m_settingsPath;
     std::string                 m_testRunDir;
 	PresetInfoPtr               m_currentPreset;
 	std::vector<PresetInfoPtr>	m_presetList;
     std::vector<PresetInfoPtr>  m_playlist;
     std::set<PresetInfoPtr>     m_presetBlacklist;
-    int                         m_playlistPos = 0;
+//    int                         m_playlistPos = 0;
+
     
+    
+    struct HistoryEntry
+    {
+        int                 index;
+        double              time;
+        PresetInfoPtr       preset;
+        PresetLoadArgs      args;
+    };
+    
+    std::vector<HistoryEntry>  m_presetHistory;
+    int                        m_presetHistoryPos = 0;
 
     std::map<std::string, PresetInfoPtr>    m_presetLookup;
     
     
+    std::vector<PresetGroupPtr> m_presetGroups;
+    std::map<std::string, PresetGroupPtr> m_presetGroupMap;
+    
+    ImGuiTextFilter     m_presetFilter;
+    std::vector<PresetInfoPtr> m_presetListFiltered;
+
     bool                        m_shouldQuit = false;
-    int                         m_presetLoadCount = 0;
     
     bool                        m_selectionLocked = false;
     ContentMode                 m_contentMode = ContentMode::ScaleAspectFill;
     IAudioAnalyzerPtr           m_audio;
+    ITextureSetPtr              m_texture_map;
 	IVisualizerPtr				m_vizualizer;
 
-    std::vector<IAudioSourcePtr> m_audioSourceList;
-    IAudioSourcePtr              m_audioSource;
+    IAudioSourcePtr             m_audio_null;
+    IAudioSourcePtr             m_audio_wavfile;
+    IAudioSourcePtr             m_audio_microphone;
+    IAudioSourcePtr             m_audioSource;
+    float                       m_audioGain = 1.0f;
     
 	int                         m_frame = 0;
 	float                       m_deltaTime = 0.0f;
     float                       m_renderTime = 0.0f;
     float                       m_frameTime = 0.0f;
 	float                       m_time = 0.0f;
+    float                       m_lastProgress = 0.0f;
 	bool						m_singleStep = false;
 	bool						m_paused = false;
-    bool                        m_showControls  = false;
-    bool                        m_showDebug  = false;
-    bool                        m_showPresetSelector = false;
-    bool                        m_showPlayList = false;
-    bool                        m_showLogWindow = false;
+    bool                        m_showUI  = false;
+    bool                        m_showSettings  = false;
     bool                        m_showAudioWindow = false;
     bool                        m_showProfiler = false;
-
-    std::vector< std::function< void ()> > m_customDebugMenus;
+    bool                        m_showDemoWindow = false;
 
     StopWatch                   m_frameTimer;
     
@@ -210,9 +270,10 @@ public:
 
     std::future<bool>   m_screenshotFuture;
     
+    std::future<void> m_LoadPresetFuture;
+    
     float        m_fBlendTimeAuto= 2.7f;        // blend time when preset auto-switches
     float        m_fTimeBetweenPresets = 15.0f;        // <- this is in addition to m_fBlendTimeAuto
-
 
     std::mt19937     m_random_generator;
     
@@ -220,6 +281,7 @@ public:
     render::TexturePtr m_texture_halfwhite;
     
     std::vector<float> m_frameTimes;
+    std::vector<float> m_frameTimeHistory;
 };
 
 using VizControllerPtr = std::shared_ptr<VizController>;

@@ -3,7 +3,7 @@
 // found in the LICENSE.txt file.
 
 
-#include "typeSamplers.h"
+#include "mslTypeSamplers.h"
 #include "localintermediate.h"
 #include "mslOutput.h"
 

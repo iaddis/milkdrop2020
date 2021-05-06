@@ -612,7 +612,6 @@ public:
 	
     virtual bool IsThreaded() override { return true; }
 	
-	virtual TexturePtr CreateTextureFromFile(const char *name, const char *path) override;
 	virtual TexturePtr CreateRenderTarget(const char *name, int width, int height, PixelFormat format) override;
 	virtual TexturePtr CreateTexture(const char *name, int width, int height, PixelFormat format, const void *data) override;
 	virtual ShaderPtr  CreateShader(const char *name) override;
@@ -1034,7 +1033,8 @@ public:
             return;
         }
         default:
-            assert(0);
+            // ignore...
+//            assert(0);
             return;
         }
        
@@ -1263,11 +1263,16 @@ public:
         if (!Hlsl2Msl_Parse(compiler, hlsl.c_str(),
                             targetVersion,
                             &callbacks, options)) {
-            errors = "Hlsl2Glsl_Parse error:\n";
+            errors = "Hlsl2Msl_Parse error:\n";
             errors += Hlsl2Msl_GetInfoLog(compiler);
+            
+            errors += ">>>>> HLSL_START\n";
+            errors += hlsl;
+            errors += "\n<<<<< HLSL_END\n";
+
 //            printf("%s\n", hlsl.c_str());
             Hlsl2Msl_DestructCompiler(compiler);
-            return nullptr;
+            return false;
         }
         
         //    printf("Hlsl2Glsl\n%s\n", Hlsl2Msl_GetInfoLog(compiler));
@@ -1277,11 +1282,16 @@ public:
                                  entryName.c_str(),
                                  targetVersion,
                                  options)) {
-            errors = "Hlsl2Glsl_Translate error:\n";
+            errors = "Hlsl2Msl_Translate error:\n";
             errors += Hlsl2Msl_GetInfoLog(compiler);
+            
+            errors += ">>>>> HLSL_START\n";
+            errors += hlsl;
+            errors += "\n<<<<< HLSL_END\n";
+            
 //            printf("%s\n", hlsl.c_str());
             Hlsl2Msl_DestructCompiler(compiler);
-            return nullptr;
+            return false;
         }
         
         
@@ -1745,6 +1755,9 @@ static MTLBlendFactor ConvertBlendFactor(BlendFactor factor)
 
 id <MTLRenderPipelineState> CreatePipelineState(MetalShader *shader, const PipelineKey &key)
 {
+    
+    PROFILE_FUNCTION_CAT("shader")
+
     MetalContext *context = shader->_context;
     std::stringstream ss;
     ss << "Pipeline_" <<  shader->_name;
@@ -2112,9 +2125,7 @@ void MetalContext::SetView(MTKView *view)
         _currentDrawable = view.currentDrawable;
     }
     
-    CAMetalLayer *layer = (CAMetalLayer *)view.layer;
 
-    
 #if TARGET_OS_OSX
 
     NSWindow *window = view.window;
@@ -2122,6 +2133,7 @@ void MetalContext::SetView(MTKView *view)
     
     NSScreen *screen = window.screen;
     float maxEDR  = screen.maximumExtendedDynamicRangeColorComponentValue;
+    
 #else
     UIWindow *window = view.window;
     UIScreen * screen = window.screen;
@@ -2132,12 +2144,24 @@ void MetalContext::SetView(MTKView *view)
 
  
     
-    CGColorSpaceRef colorSpace = layer.colorspace;
+    
     
     std::string colorSpaceName;
-    if (colorSpace)
+    bool hdr = true;
+    
+    if (@available(macOS 14.0, tvOS 13.0, iOS 13.0, *))
     {
-        CFStringConvert( CGColorSpaceGetName(colorSpace), colorSpaceName);
+        CAMetalLayer *layer = (CAMetalLayer *)view.layer;
+        CGColorSpaceRef colorSpace = layer.colorspace;
+
+        if (colorSpace)
+        {
+            CFStringConvert( CGColorSpaceGetName(colorSpace), colorSpaceName);
+        }
+        
+#if TARGET_OS_OSX
+        hdr = (bool)layer.wantsExtendedDynamicRangeContent;
+#endif
     }
 
 
@@ -2159,7 +2183,8 @@ void MetalContext::SetView(MTKView *view)
         .scale= scale,
         .samples= sampleCount,
         .maxEDR= maxEDR,
-        .colorSpace = colorSpaceName
+        .colorSpace = colorSpaceName,
+        .hdr = hdr
     });
     
     
@@ -2240,43 +2265,6 @@ bool MetalContext::IsSupported(PixelFormat format)
         default:
             return true;
     }
-}
-
-
-
-TexturePtr MetalContext::CreateTextureFromFile(const char *name, const char *path)
-{
-    PROFILE_FUNCTION_CAT("texture")
-
-    std::vector<uint8_t> data;
-    if (!FileReadAllBytes(path, data)) {
-        return nullptr;
-    }
-    
-    NSData *nsdata = [NSData dataWithBytes:data.data() length: (NSUInteger) data.size() ];
-
-    NSDictionary *textureLoaderOptions =
-    @{
-      MTKTextureLoaderOptionTextureUsage       : @(MTLTextureUsageShaderRead),
-      MTKTextureLoaderOptionTextureStorageMode : @(MTLStorageModePrivate)
-      };
-    
-    MTKTextureLoader* textureLoader = [[MTKTextureLoader alloc] initWithDevice:_device];
-    
-    
-    
-    NSError *error = nil;
-    id<MTLTexture>  texture = [textureLoader newTextureWithData:nsdata
-                                                        options:textureLoaderOptions
-                                                          error:&error]
-                                                          ;
-
-    if (texture == nil) {
-        return nullptr;
-    }
-    
-    texture.label = [NSString stringWithUTF8String:name];
-    return std::make_shared<MetalTexture>(name, texture);
 }
 
 
@@ -2470,6 +2458,7 @@ bool MetalContext::UploadTextureData(TexturePtr texture, const void *data, int w
     EndEncoder();
         
     Size2D size = mtexture->GetSize();
+    (void)size;
     assert(width <= size.width && height <= size.height);
   
     auto cb = GetCommandBuffer();

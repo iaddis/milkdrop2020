@@ -7,7 +7,7 @@
 // this is djb's xor hashing function.
 static inline uint32 hash_string_djbxor(const char *str, size_t len)
 {
-    register uint32 hash = 5381;
+    uint32 hash = 5381;
     while (len--)
         hash = ((hash << 5) + hash) ^ *(str++);
     return hash;

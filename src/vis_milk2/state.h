@@ -380,7 +380,8 @@ public:
 	void Default();
 	void Randomize(int nMode);
 	void StartBlendFrom(CState *s_from, float fAnimTime, float fTimespan);
-	bool Import(std::string szIniFile, std::string &errors);
+    bool ImportFromFile(std::string path, std::string name, std::string &errors);
+    bool ImportFromText(std::string text, std::string name, std::string &errors);
 	bool Export(std::string szIniFile);
     
     void Export(PresetWriter &pw);
@@ -419,8 +420,6 @@ public:
     float frand();
     
     float time_import = 0.0f;
-    float fBlendTime = 0.0f;
-    float presetDuration = 20.0f; 
     
 	CPlugin * m_plugin;
 

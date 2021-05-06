@@ -1,7 +1,6 @@
 
 #include "platform.h"
 #include "script-kernel.h"
-#include "script-kernel-generated.h"
 #include "script-functype.h"
 #include "script-functions.h"
 
@@ -17,43 +16,9 @@
 #include <thread>
 #include <future>         // std::async, std::future
 
-bool UsePrecompiledKernels = true;
 
 namespace Script { namespace mdpx {
 
-    
-    int JS_kernel_register(const char *code);
-    void JS_kernel_execute(int kid, ValueTypePtr state, int count);
-    
-#if USE_JAVASCRIPT
-    int JS_kernel_register(const char *code)
-    {
-        int kid = EM_ASM_INT({
-            return kernel_register( UTF8ToString($0) );
-        }, code );
-        return kid;
-    }
-    
-    void JS_kernel_execute(int kid, ValueTypePtr state, int count)
-    {
-        EM_ASM({
-            kernel_execute( $0, $1, $2 );
-        }, kid, state, count );
-    }
-#else
-    
-    int JS_kernel_register(const char *code)
-    {
-        return 0;
-    }
-    
-    void JS_kernel_execute(int kid, ValueTypePtr state, int count)
-    {
-        
-    }
-    
-#endif
-    
     
 void Kernel::DebugUI()
 {
@@ -131,18 +96,6 @@ void Kernel::DebugUI()
         return hash;
     }
 
-    KernelFunc GetPrecompiledKernel(uint64_t hash)
-    {
-        if (hash == 0)
-            return nullptr;
-        const std::map<uint64_t, KernelFunc> &map = Generated::GetRegisteredPrecompilerKernels();
-        auto it = map.find(hash);
-        if (it != map.end())
-        {
-            return it->second;
-        }
-        return nullptr;
-    }
     
     Kernel::Kernel(
            ScriptContextPtr vm,
@@ -184,33 +137,7 @@ void Kernel::DebugUI()
         }
         
         m_state.resize( m_registers.size() );
-
-#if 0
-        if (vm->m_nseel_context)
-        {
-            std::string code = source;
-            m_nseel_code =  NSEEL_code_compile(vm->m_nseel_context, (char *)code.c_str(), 0);
-        }
-#endif
-        
-        
-        // see if we have a kernel function
-        uint64_t hash = GetHash();
-        if (hash != 0)
-        {
-            m_precompiled_func = GetPrecompiledKernel(hash);
-        }
-        
-#if USE_JAVASCRIPT
-        if (m_expr) {
-            std::stringstream ss;
-            GenerateJS(GetName(), ss);
-            std::string code = ss.str();
-            m_kernel_id = JS_kernel_register(code.c_str());
-        }
-#endif
-
-        
+  
     }
     
     Kernel::~Kernel()
@@ -369,18 +296,7 @@ void Kernel::DebugUI()
         if (!m_expr) {
             return;
         }
-
-        if (m_kernel_id)
-        {
-            JS_kernel_execute(m_kernel_id, state, 1);
-            return;
-        }
-        
-        if (m_precompiled_func && UsePrecompiledKernels)
-        {
-            m_precompiled_func(state, state, m_parameters.size(), 1);
-            return;
-        }
+ 
         
         m_expr->Evaluate(state);
     }
@@ -389,20 +305,6 @@ void Kernel::DebugUI()
     void Kernel::Execute(ValueType *state, ValueType *params, size_t param_count, size_t iter_count)
     {
         PROFILE_FUNCTION_CAT("script")
-              
-        
-//        if (m_kernel_id)
-//        {
-//            JS_kernel_execute(m_kernel_id, state, (int)count);
-//            return;
-//        }
-//
-        if (m_precompiled_func && UsePrecompiledKernels)
-        {
-            m_precompiled_func(state, params, param_count, iter_count);
-            return;
-        }
-
 
         for (size_t iter=0; iter < iter_count; iter++)
         {
@@ -523,166 +425,6 @@ void Kernel::DebugUI()
         
     }
     
-    void Kernel::GenerateMetal(std::string funcName, std::ostream &o)
-    {
-    }
-    
-    void Kernel::GenerateJS(std::string funcName, std::ostream &o)
-    {
-#if 0
-        o << "(_addr, _count) => {\n";
-        o << "_addr >>= 3; \n";
-        
-        o << "for (let _iter=0; _iter < _count; _iter++) { \n";
-        
-        
-        // read all variables
-        for (size_t i=0; i < m_registers.size(); i++)
-        {
-            auto *reg = m_registers[i];
-            o << "let" << " " << reg << " = " << "HEAPF64[ _addr + " << reg->GetIndex() << "];\n";
-        }
-        
-        o << "\n";
-        o << m_expr;
-        o << "\n";
-        
-        // commit all variables
-        for (size_t i=0; i < m_registers.size(); i++)
-        {
-            auto *reg = m_registers[i];
-            o << "HEAPF64[ _addr + " << reg->GetIndex() << "] = " << var  << ";\n";
-        }
-
-        o << "_addr += " << m_registers.size() << ";\n";
-        
-        o << "} // end for\n"; 
-
-        o << "}\n";
-#endif
-    }
-    
-    void Kernel::GenerateCPP(std::string funcName, std::ostream &o)
-    {
-#if 1
-        o << "static ";
-        o << "void ";
-        o << funcName;
-        o << "(ValueTypePtr _state, ValueTypePtr _params, size_t _param_count, size_t _iter_count)\n";
-        o << "{\n";
-        
-        // read all registers
-        for (size_t i=0; i < m_registers.size(); i++)
-        {
-            auto *var = m_registers[i];
-            if (var->IsRead || var->IsWrite)
-            {
-                o << "// " << var << "  ";
-                if (var->IsLocal) o << "local ";
-                if (var->IsRead) o << "read ";
-                if (var->IsWrite) o << "written ";
-                if (var->IsReadBeforeWrite) o << "read-before-write ";
-                if (var->IsWriteBeforeRead) o << "write-before-read ";
-                
-                //                auto vmvar = m_vmvars[i];
-                // if (vmvar->IsReadOnly) o << "readonly ";
-                //                if (vmvar->IsSetBeforeKernelExecute) o << "IsSetBeforeKernelExecute ";
-                //               if (vmvar->IsReadAfterKernelExecute) o << "IsReadAfterKernelExecute ";
-                
-                //                if (var->IsLocal) o << "local ";
-                //                if (var->IsGlobal) o << "global ";
-                //                if (var->IsReadOnly) o << "readonly ";
-                //                if (var->IsInput) o << "input ";
-                //                if (var->IsOutput) o << "output ";
-                
-                o << "\n";
-            }
-        }
-        
-        
-        // read all registers that are not parameters
-        for (auto reg : m_registers)
-        {
-            auto *var = reg->vmvar;
-            
-            if (var->Usage != VarUsage::Parameter)
-            if (reg->IsRead || reg->IsWrite)
-            {
-                o << '\t' << "ValueType" << " " << reg << "";
-                
-                // add initializer
-//                if (reg->IsRead && !reg->IsWriteBeforeRead)
-                    o << " = " << "_state[" << reg->GetIndex() << "]";
-                
-                o <<";\n";
-            }
-        }
-        
-        
-        
-        o << "\tfor (size_t _iter=0; _iter < _iter_count; _iter++) { \n";
-      
-      
-    
-        // read all parameters
-        for (auto reg : m_parameters)
-        {
-            auto *var = reg->vmvar;
-            
-            if (var->Usage == VarUsage::Parameter)
-            if (reg->IsRead || reg->IsWrite)
-            {
-                o << '\t' << "ValueType" << " " << reg << "";
-                
-                // add initializer
-                if (reg->IsRead && !reg->IsWriteBeforeRead)
-                    o << " = " << "_params[" << reg->GetIndex() << "]";
-                
-                o <<";\n";
-            }
-        }
-        
-        
-        o << "\n";
-        o << m_expr;
-        o << "\n";
-        
-        
-        // commit all parameters
-        for (auto reg : m_parameters)
-        {
-            auto *var = reg->vmvar;
-            
-            if (var->Usage == VarUsage::Parameter)
-                if (reg->IsWrite)
-                {
-                    o  << '\t' << "_params[" << reg->GetIndex() << "] = " << reg << ";\n";
-                }
-        }
-        
-        
-        
-
-//        o << "_params += " << m_parameters.size() << ";\n";
-        o << "\t_params += _param_count; // " << m_parameters.size() << ";\n";
-        o << "\t} // end for\n";
-        
-        // commit all variables (non-parameters)
-        for (auto reg : m_registers)
-        {
-            auto *var = reg->vmvar;
-            if (var->Usage != VarUsage::Parameter)
-            if (reg->IsWrite)
-            {
-                o  << '\t' << "_state[" << reg->GetIndex() << "] = " << reg << ";\n";
-            }
-        }
-        
-        
-        o << "}\n";
-#endif
-    }
-
         
     class KernelBuffer : public IKernelBuffer, public std::enable_shared_from_this<KernelBuffer>
     {

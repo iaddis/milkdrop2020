@@ -5,6 +5,8 @@
 #include <time.h>
 #include <assert.h>
 
+#define GL_SILENCE_DEPRECATION
+
 #define USE_REAL_OPENGL_TO_CHECK 1
 
 static const bool kDumpShaderAST = false;

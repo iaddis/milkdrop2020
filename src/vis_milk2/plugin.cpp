@@ -504,9 +504,9 @@ extern float AdjustRateToFPS(float per_frame_decay_rate_at_fps1, float fps1, flo
 
 
 // glue factory
-IVisualizerPtr CreateVisualizer(ContextPtr context, IAudioAnalyzerPtr audio, std::string pluginDir)
+IVisualizerPtr CreateVisualizer(ContextPtr context, IAudioAnalyzerPtr audio, ITextureSetPtr texture_map, std::string pluginDir)
 {
-    std::shared_ptr<CPlugin> plugin = std::make_shared<CPlugin>(context, audio, pluginDir );
+    std::shared_ptr<CPlugin> plugin = std::make_shared<CPlugin>(context, audio, texture_map, pluginDir );
 	if (!plugin->PluginInitialize())
 	{
 		return nullptr;
@@ -518,7 +518,7 @@ IVisualizerPtr CreateVisualizer(ContextPtr context, IAudioAnalyzerPtr audio, std
 
 std::string CPlugin::LoadShaderCode(const char* szBaseFilename)
 {
-	std::string szFile = m_assetDir + "/data/" + szBaseFilename;
+	std::string szFile = m_assetDir + "/shaders/" + szBaseFilename;
 	std::replace(szFile.begin(), szFile.end(), '\\', '/');
     
     std::string text;
@@ -535,8 +535,8 @@ std::string CPlugin::LoadShaderCode(const char* szBaseFilename)
 
 //----------------------------------------------------------------------
 
-CPlugin::CPlugin(ContextPtr context, IAudioAnalyzerPtr audio, std::string assetDir)
-	:m_context(context), m_audio(audio), m_drawbuffer(render::CreateDrawBuffer(context))
+CPlugin::CPlugin(ContextPtr context, IAudioAnalyzerPtr audio, ITextureSetPtr texture_map, std::string assetDir)
+	:m_context(context), m_audio(audio), m_texture_map(texture_map), m_drawbuffer(render::CreateDrawBuffer(context))
 {
 	m_frame = 0;
 	m_time = 0;
@@ -570,8 +570,6 @@ CPlugin::CPlugin(ContextPtr context, IAudioAnalyzerPtr audio, std::string assetD
     
 	m_nGridX			= 48;//32;
 	m_nGridY			= 36;//24;
-
-	m_bNeedRescanTexturesDir = true;
 
 	// RUNTIME SETTINGS THAT WE'VE ADDED
 	m_PresetDuration     = 0.0f;
@@ -667,7 +665,7 @@ void CPlugin::SetFixedShader(TexturePtr texture, SamplerAddress addr, SamplerFil
 
 ShaderPtr CPlugin::LoadShaderFromFile(const char *name)
 {
-    std::string rootDir = m_assetDir + "/data/";
+    std::string rootDir = m_assetDir + "/shaders/";
     std::string path = PathCombine(rootDir, name);
     
 
@@ -1056,17 +1054,17 @@ bool CPlugin::AllocateResources()
 	//-------------------------------------
 	{
 		// Generate noise textures
-		if (!AddNoiseTex("noise_lq",      256, 1)) return false; 
-		if (!AddNoiseTex("noise_lq_lite",  32, 1)) return false; 
-		if (!AddNoiseTex("noise_mq",      256, 4)) return false;
-		if (!AddNoiseTex("noise_hq",      256, 8)) return false; 
+		AddNoiseTex("noise_lq",      256, 1);
+		AddNoiseTex("noise_lq_lite",  32, 1);
+		AddNoiseTex("noise_mq",      256, 4);
+		AddNoiseTex("noise_hq",      256, 8);
 
 #if 0
-		if (!AddNoiseVol("noisevol_lq", 32, 1)) return false; 
-		if (!AddNoiseVol("noisevol_hq", 32, 4)) return false;
+        AddNoiseVol("noisevol_lq", 32, 1);
+        AddNoiseVol("noisevol_hq", 32, 4);
 #else
-        if (!AddNoiseTex("noisevol_lq", 256, 1)) return false;
-        if (!AddNoiseTex("noisevol_hq", 256, 4)) return false;
+        AddNoiseTex("noisevol_lq", 256, 1);
+        AddNoiseTex("noisevol_hq", 256, 4);
 #endif
 	}
     
@@ -1116,7 +1114,7 @@ static uint32_t dwCubicInterpolate(uint32_t y0, uint32_t y1, uint32_t y2, uint32
 	return ret;
 }
 
-bool CPlugin::AddNoiseTex(const char* szTexName, int size, int zoom_factor)
+void CPlugin::AddNoiseTex(const char* szTexName, int size, int zoom_factor)
 {
 	// size = width & height of the texture; 
 	// zoom_factor = how zoomed-in the texture features should be.
@@ -1199,11 +1197,9 @@ bool CPlugin::AddNoiseTex(const char* szTexName, int size, int zoom_factor)
 
 	// add it to m_textures[].  
 	TexturePtr texptr  = m_context->CreateTexture(szTexName, size, size, m_FormatRGBA8, data);
-	m_textures.push_back(texptr);
+    m_texture_map->AddTexture(szTexName, texptr);
 	delete[] data;
-	LogPrint("Created noise texture %s (%dx%d)\n", szTexName, size, size);
-	return true;
-	
+//	LogPrint("Created noise texture %s (%dx%d)\n", szTexName, size, size);
 }
 
 #if 0
@@ -1324,117 +1320,27 @@ bool CPlugin::AddNoiseVol(const char* szTexName, int size, int zoom_factor)
 }
 #endif
 
-
-static const char *s_texture_exts[] = { ".jpg", ".dds", ".png", ".tga", ".bmp", ".dib", NULL };
-
-static bool IsTextureFileName(const std::string &path)
+bool CPlugin::PickRandomTexture(const std::string &prefix, std::string &szRetTextureFilename)
 {
-    std::string ext = PathGetExtension(path);
-    for (int i = 0; s_texture_exts[i]; i++)
-    {
-        if (ext == s_texture_exts[i])
-        {
-            return true;
-        }
-    }
-    return false;
+    std::vector<render::TexturePtr> list;
+    m_texture_map->GetTextureListWithPrefix(prefix, list);
+    if (list.empty())
+        return false;
+
+    // pick random texture
+    int i = warand((int)list.size());
+    szRetTextureFilename = list[i]->GetName();
+    return true;
 }
 
-
-
-
-bool CPlugin::PickRandomTexture(const char* prefix, std::string &szRetTextureFilename)  //should be MAX_PATH chars
+render::TexturePtr CPlugin::LookupTexture(const std::string &name)
 {
-	// if it's been more than a few seconds since the last textures dir scan, redo it.  
-	// (..just enough to make sure we don't do it more than once per preset load)
-	//uint32_t t = timeGetTime(); // in milliseconds
-	//if (abs(t - texfiles_timestamp) > 2000)
-	if (m_bNeedRescanTexturesDir)
-	{
-		m_bNeedRescanTexturesDir = false;//texfiles_timestamp = t;
-		texfiles.clear();
-
-		std::string dir = m_assetDir + "/textures";
-
-		std::vector<std::string> files;
-		DirectoryGetFiles(dir, files);
-
-		for (size_t j = 0; j < files.size(); j++)
-		{
-			std::string file = files[j];
-            if (IsTextureFileName(file))
-            {
-                texfiles.push_back( PathGetFileName(file) );
-            }
-		}
-	}
-
-	if (texfiles.size() == 0)
-		return false;
-
-	// then randomly pick one
-	if (prefix==NULL || prefix[0]==0) 
-	{
-		// pick randomly from entire list
-		int i = warand((int)texfiles.size());
-        szRetTextureFilename = texfiles[i];
-	}
-	else
-	{
-		// only pick from files w/the right prefix
-		StringVec temp_list;
-		size_t N = texfiles.size();
-		size_t len = strlen(prefix);
-		for (size_t i=0; i<N; i++) 
-			if (!strncasecmp(prefix, texfiles[i].c_str(), len))
-				temp_list.push_back(texfiles[i]);
-		N = temp_list.size();
-		if (N==0)
-			return false;
-		// pick randomly from the subset
-		int i = warand((int)temp_list.size());
-        szRetTextureFilename = temp_list[i];
-	}
-	return true;
+    return m_texture_map->LookupTexture(name);
 }
 
 TexturePtr CPlugin::LoadDiskTexture(const std::string &name)
 {
-    // see if texture already exists
-    for (auto texture : m_textures)
-    {
-        if (texture && (name == texture->GetName()))
-        {
-            // found a match - texture was already loaded
-            return texture;
-        }
-    }
-
-    // if still not found, load it up / make a new texture
-    TexturePtr texture;
-    
-    std::string textureDir = PathCombine(m_assetDir, "textures");
-                                         
-    
-    // load the texture
-    for (int z=0; s_texture_exts[z]; z++)
-    {
-        std::string path = PathCombine(textureDir, name + s_texture_exts[z]);
-        if (!FileExists(path))
-        {
-            continue;
-        }
-        
-        texture = m_context->CreateTextureFromFile(name.c_str(), path.c_str());
-        if (texture)
-        {
-            m_textures.push_back(texture);
-            return texture;
-        }
-    }
-    
-    LogError("Could not load disk texture: %s\n", name.c_str() );
-    return nullptr;
+    return m_texture_map->LookupTexture(name);
 }
 
 static bool StartsWith(const std::string &str, const std::string &prefix)
@@ -1557,7 +1463,7 @@ void ShaderInfo::CacheParams(CPlugin *plugin)
                     
 					if (rand_slot >= 0 && rand_slot <= 15)      // otherwise, not a special filename - ignore it
 					{
-						if (!plugin->PickRandomTexture(prefix.c_str(), tex_path))
+						if (!plugin->PickRandomTexture(prefix, tex_path))
 						{
 							if (prefix[0])
 								tex_path = StringFormat("[rand%02d] %s*", rand_slot, prefix.c_str());
@@ -1637,7 +1543,6 @@ void ShaderInfo::CacheParams(CPlugin *plugin)
 
 						// ditch filename prefix ("rand13_smalltiled", for example)
 						// and just go by the slot
-                        szRootName = szRootName.substr(6);
 
                         std::string rand_slot_str = szRootName.substr(4, 2);
                         sscanf(rand_slot_str.c_str(), "%d", &rand_slot);
@@ -1648,25 +1553,17 @@ void ShaderInfo::CacheParams(CPlugin *plugin)
 					}
 
 					// see if <szRootName>.tga or .jpg has already been loaded.
-					bool bTexFound = false;
-                    for (auto texture : plugin->m_textures)
+                    auto texture = plugin->LookupTexture(szRootName);
+                    if (texture)
                     {
-						if (texture->GetName() == szRootName)
-						{
-							// found a match - texture was loaded
-							TexSizeParamInfo y;
-							y.texname       = szRootName; //for debugging
-							y.texsize_param = h;
-							y.w             = texture->GetWidth();
-							y.h             = texture->GetHeight();
-							texsize_params.push_back(y);
-							
-							bTexFound = true;
-							break;
-						}
-					}
-
-					if (!bTexFound)
+                        // found a match - texture was loaded
+                        TexSizeParamInfo y;
+                        y.texname       = szRootName; //for debugging
+                        y.texsize_param = h;
+                        y.w             = texture->GetWidth();
+                        y.h             = texture->GetHeight();
+                        texsize_params.push_back(y);
+					} else
 					{
 						LogError("UNABLE_TO_RESOLVE_TEXSIZE_FOR_A_TEXTURE_NOT_IN_USE %s\n", name.c_str() );
 					}
@@ -1774,8 +1671,8 @@ std::string CPlugin::ComposeShader( const std::string &szOrigShaderText, const c
     const char szLastLine[] = "    return float4(ret.xyz, _v.color.w);";
     
     std::string szShaderText;
-    szShaderText.append(m_szShaderIncludeText);
-    szShaderText.append("\n");
+//    szShaderText.append(m_szShaderIncludeText);
+//    szShaderText.append("\n");
     
     // paste in any custom #defines for this shader type
     std::string szFirstLine = "\n    float3 ret = 0;\n";
@@ -1825,22 +1722,40 @@ std::string CPlugin::ComposeShader( const std::string &szOrigShaderText, const c
         size_t body = szShaderText.find(find_str);
         if (body != std::string::npos)
         {
+            const char *params = (shaderType == SHADER_WARP) ? szWarpParams : szCompParams;
+            char fstr[4096];
+            sprintf(fstr, "float4 %s( %s ) : COLOR0\n", szFn, params);
+            szShaderText.replace(body, find_str.size(), fstr);
+
+            
             size_t start = szShaderText.find('{', body);
             if (start != std::string::npos)
             {
                 size_t end = szShaderText.rfind("}");
                 if (end != std::string::npos)
                 {
+                    // truncate everything after the last } in the shader, some people leave comment text after the last }
+                    szShaderText.resize(end + 1);
+                    
                     szShaderText.insert(end, szLastLine);
                     szShaderText.insert(start + 1, szFirstLine);
-                    const char *params = (shaderType == SHADER_WARP) ? szWarpParams : szCompParams;
-                    char fstr[4096];
-                    sprintf(fstr, "float4 %s( %s ) : COLOR0\n", szFn, params);
-                    szShaderText.replace(body, find_str.size(), fstr);
                 }
+                else
+                {
+                    assert(0);
+                }
+            }
+            else
+            {
+                assert(0);
             }
         }
     }
+
+    szShaderText.insert(0, "\n// END include.fx \n");
+    szShaderText.insert(0, m_szShaderIncludeText);
+    szShaderText.insert(0, "\n// BEGIN include.fx\n");
+
     
     return szShaderText;
     //return m_context->CompileShader(szShaderText.c_str(), szFn, szProfile);
@@ -1884,8 +1799,6 @@ void CPlugin::ReleaseResources()
 	// just force this:
 	m_bBlending = false;
 
-
-	m_textures.clear();
 
     m_blur_textures.clear();
     m_blurtemp_textures.clear();
@@ -2051,6 +1964,12 @@ void CPlugin::Draw(ContentMode mode, float alpha)
     m_context->DrawArrays(PRIMTYPE_TRIANGLESTRIP, 4,  v);
     
     m_context->SetTransform(saved);
+}
+
+
+TexturePtr CPlugin::GetInternalTexture()
+{
+    return m_lpVS[0];
 }
 
 
@@ -2364,7 +2283,7 @@ void CPlugin::Render(float dt)
 {
 	m_fps = 1.0f / dt;
     
-    CheckPresetLoad();
+//    CheckPresetLoad();
     
     RenderFrame();  // see milkdropfs.cpp
 
@@ -2667,52 +2586,36 @@ void CPlugin::GenPlasma(int x0, int x1, int y0, int y1, float dt)
 }
 
 
-CStatePtr CPlugin::LoadPresetFromFile(std::string path, std::string &errors)
+PresetPtr CPlugin::LoadPresetFromFile(std::string &presetText, std::string path, std::string name, std::string &errors)
 {
     PROFILE_FUNCTION_CAT("load")
     StopWatch sw;
     
-    if (!FileExists(path.c_str()))
+    std::string text = presetText;
+    if (text.empty())
     {
-        errors = StringFormat("Preset file not found %s\n", path.c_str());
-        return nullptr;
+        if (!FileReadAllText(path, text))
+        {
+            errors = StringFormat("ERROR loading preset: '%s'", path.c_str());
+            return nullptr;
+        }
     }
     
     CStatePtr state = std::make_shared<CState>(this);
-    if (!state->Import(path, errors)) {
+    if (!state->ImportFromText(text, name, errors)) {
         // failed to import...
         return nullptr;
     }
     
+    state->m_path = path;
     state->time_import = sw.GetElapsedMilliSeconds();
-
+    
 //    LogPrint("LoadPreset: '%s' (%fms)\n", state->m_desc.c_str(), sw.GetElapsedMilliSeconds() );
 
     // loaded!
     return state;
 }
 
-
-bool CPlugin::TestPreset(std::string path, std::string &error)
-{
-    if (!FileExists(path.c_str()))
-    {
-        error = "File not found: ";
-        error += path;
-        return false;
-    }
-    
-    CStatePtr state = std::make_shared<CState>(this);
-    if (!state->Import(path, error)) {
-        // failed to import...
-        return false;
-    }
-    
-    // loaded!
-    error.clear();
-    return true;
-
-}
 
 
 void CPlugin::LoadEmptyPreset()
@@ -2733,7 +2636,7 @@ void CPlugin::LoadEmptyPreset()
 //    state->m_bDarkenCenter = true;
     state->RecompileExpressions();
 
-    LogPrint("LoadEmptyPreset %s\n", state->m_desc.c_str());
+//    LogPrint("LoadEmptyPreset %s\n", state->m_desc.c_str());
 
     m_pOldState = m_pState;
     m_pState = state;
@@ -2743,104 +2646,37 @@ void CPlugin::LoadEmptyPreset()
 }
 
 
-bool CPlugin::IsLoadingPreset()
-{
-    return m_presetLoadFuture.valid();
-}
 
 
-void   CPlugin::LoadPresetKernelsFromFile(std::string path, Script::mdpx::KernelCodeGenerator &cg)
-{
-    std::string errors;
-    auto preset = LoadPresetFromFile(path, errors);
-    if (!preset)
-        return;
 
-    cg.AddKernel(preset->m_perframe_expression);
-    cg.AddKernel(preset->m_pervertex_expression);
-
-    for (auto wave : preset->m_waves)
-    {
-        cg.AddKernel(wave->m_perpoint_expression);
-        cg.AddKernel(wave->m_perframe_expression);
-    }
-    
-    for (auto shape : preset->m_shapes)
-    {
-        cg.AddKernel(shape->m_perframe_expression);
-    }
-}
-
-void CPlugin::CheckPresetLoad()
-{
-    if (DispatchIsComplete(m_presetLoadFuture))
-    {
-        CStatePtr preset = m_presetLoadFuture.get();
-        m_presetLoadFuture = std::future<CStatePtr>();
-
-        LoadPreset(preset);
-    }
-    
-}
-
-void CPlugin::LoadPresetAsync(std::string path, float fBlendTime, float presetDuration)
-{
-    auto func = [this, path, fBlendTime, presetDuration]  {
-            std::string errors;
-            CStatePtr state = LoadPresetFromFile(path, errors);
-            if (state) {
-               state->fBlendTime = fBlendTime;
-               state->presetDuration = presetDuration;
-            }
-            return state;
-       };
-    
-    Dispatch<CStatePtr>(m_presetLoadFuture, func);
-}
-
-bool CPlugin::LoadPreset(std::string path, float fBlendTime, float presetDuration)
-{
-    std::string errors;
-    CStatePtr state = LoadPresetFromFile(path, errors);
-    if (!state) {
-        return false;
-    }
-    
-    state->fBlendTime = fBlendTime;
-    state->presetDuration = presetDuration;
-    
-    return LoadPreset(state);
-}
-
-bool CPlugin::LoadPreset(CStatePtr loaded)
+void CPlugin::SetPreset(CStatePtr preset, PresetLoadArgs args)
 {
     PROFILE_FUNCTION()
     
-    std::string errors;
-    loaded->RecompileShaders(errors);
-    if (!errors.empty())
+    if (!m_context->IsThreaded())
     {
-        LogError("ERROR: Shader compilation '%s'\n%s\n",
-                 loaded->GetName().c_str(),
-                 errors.c_str());
-        return false;
+        std::string errors;
+        preset->RecompileShaders(errors);
+        if (!errors.empty())
+        {
+            LogError("ERROR: Shader compilation '%s'\n%s\n",
+                     preset->GetName().c_str(),
+                     errors.c_str());
+            return;
+        }
     }
-    
-    float fBlendTime = loaded->fBlendTime;
-    float presetDuration = loaded->presetDuration;
-    
     
 	//LogPrint("LoadPreset %s\n", loaded->m_desc.c_str());
 
     // if no preset was valid before, make sure there is no blend, because there is nothing valid to blend from.
     if (m_pState->m_desc.empty())
-        fBlendTime = 0;
+        args.blendTime = 0;
 
     // set as current state, keep old state
     m_pOldState = m_pState;
-    m_pState = loaded;
+    m_pState = preset;
 
-	if (fBlendTime == 0)
+	if (args.blendTime == 0)
 	{
         m_clearTargets = true;
         m_bBlending = false;
@@ -2854,15 +2690,15 @@ bool CPlugin::LoadPreset(CStatePtr loaded)
         // setup blend parameters
         m_bBlending = true;
         m_fBlendStartTime = GetTime();
-        m_fBlendDuration = fBlendTime;
+        m_fBlendDuration = args.blendTime;
 		m_pState->StartBlendFrom(m_pOldState.get(), m_fBlendStartTime, m_fBlendDuration);
 	}
 
     
     // reset preset duration
     m_PresetDuration = 0.0f;
-    m_NextPresetDuration = presetDuration;
-    return true;
+    m_NextPresetDuration = args.duration;
+//    return true;
 }
 
 

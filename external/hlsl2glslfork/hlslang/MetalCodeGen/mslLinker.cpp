@@ -889,6 +889,8 @@ bool MslLinker::buildFunctionLists(MslCrossCompiler* comp, EShLanguage lang, con
 {
 	// build the list of functions
 	std::vector<MslFunction*> &fl = comp->functionList;
+    
+    MslFunction* funcDeferredInit = nullptr;
 	
 	for (std::vector<MslFunction*>::iterator fit = fl.begin(); fit < fl.end(); ++fit)
 	{
@@ -909,6 +911,12 @@ bool MslLinker::buildFunctionLists(MslCrossCompiler* comp, EShLanguage lang, con
 			}
 			funcMain = *fit;
 		}
+        
+        if ((*fit)->getName() == "__deferred_init__")
+        {
+            funcDeferredInit = *fit;
+        }
+
 	}
 	
 	// check to ensure that we found the entry function
@@ -921,6 +929,11 @@ bool MslLinker::buildFunctionLists(MslCrossCompiler* comp, EShLanguage lang, con
 	//add all the called functions to the list
 	std::vector<MslFunction*> functionsToSort;
 	functionsToSort.push_back (funcMain);
+    if (funcDeferredInit)
+    {
+        funcDeferredInit->endBlock();
+        functionsToSort.push_back(funcDeferredInit);
+    }
 	if (!addCalledFunctions (funcMain, functionsToSort, functionList))
 		infoSink.info << "Failed to resolve all called functions in the " << kShaderTypeNames[lang] << " shader\n";
 
@@ -1798,30 +1811,30 @@ bool MslLinker::link(MslCrossCompiler* compiler, const char* entryFunc, ETargetV
     //    EmitIfNotEmpty (shader, uniform);
     
     shader <<"\n";
+
     shader << "// constructor \n";
 
     shader << "Shader(constant Buffer_Uniforms & uniforms) { \n";
 
-    std::string arrayInit = compiler->m_DeferredArrayInit.str();
-
-    if (!arrayInit.empty())
-    {
-        shader << arrayInit;
-    }
-    
-    std::string matrixInit = compiler->m_DeferredMatrixInit.str();
-    if (!matrixInit.empty())
-    {
-        shader << arrayInit;
-    }
-    
-    
     for (auto s : constants) {
         if (s->getType() >= EgstSamplerGeneric  && s->getType() <= EgstSampler2DArray ) {
         } else {
             shader << "\t" << "" << s->getName() << " = " << "uniforms." << s->getName() << ";"  << '\n';
         }
     }
+
+    std::string arrayInit = compiler->m_DeferredArrayInit.str();
+    if (!arrayInit.empty())
+    {
+        shader << arrayInit;
+    }
+
+    // invoke deferred init
+    shader << "\n";
+    shader << "\t" << "__deferred_init__();" << "\n";
+    
+    
+
     
     shader << "} \n";
     shader << "\n";

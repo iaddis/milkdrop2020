@@ -133,11 +133,6 @@ namespace Script { namespace mdpx {
 
         virtual uint64_t GetHash() override;
         
-        virtual void GenerateMetal(std::string funcName, std::ostream &o) override;
-        virtual void GenerateJS(std::string funcName, std::ostream &o) override;
-        virtual void GenerateCPP(std::string funcName, std::ostream &o) override;
-
-        
         virtual const std::string &GetDisassembly() override;
         virtual const std::string &GetSource() const override
         {
@@ -190,10 +185,6 @@ namespace Script { namespace mdpx {
         
         
         std::vector<KernelRegisterPtr>            m_parameters;
-
-        KernelFunc                  m_precompiled_func = nullptr;
-        int                         m_kernel_id = 0;
-
     
     };
     

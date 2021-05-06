@@ -1918,6 +1918,7 @@ static int SmoothWave(const Vertex* vi, int nVertsIn, Vertex* vo)
 
 static void SmoothWave(const Vertex* vi, int nVertsIn, std::vector<Vertex> &vo)
 {
+    if (nVertsIn <= 0) return;
     const float c1 = -0.15f;
     const float c2 = 1.15f;
     const float c3 = 1.15f;

@@ -22,7 +22,7 @@ import android.content.res.AssetManager;
 public class MilkDropLib {
 
      static {
-          System.loadLibrary("mdp");
+          System.loadLibrary("m1lkdr0p");
      }
 
      public static native void setAssetManager(AssetManager assetManager);

@@ -41,8 +41,11 @@ public:
     
     virtual void Reset() = 0;
     
-    virtual void Update(IAudioSourcePtr source, float dt) = 0;
-    
+    virtual void Update(IAudioSourcePtr source, float dt, float gain) = 0;
+
+    virtual float GetSampleRate() = 0;
+    virtual int GetBlockSize() = 0;
+
     virtual float GetImm(AudioBand band) = 0;
     virtual float GetImmRel(AudioBand band) = 0;
     virtual float GetAvgRel(AudioBand band) = 0;
@@ -65,8 +68,7 @@ public:
     virtual void RenderSpectrum(int sampleCount, SampleBuffer<float> &sL, SampleBuffer<float> &sR) = 0;
 
 
-    virtual void DebugDrawUI(bool *popen) = 0;
-    virtual void DrawStatsUI() = 0;
+    virtual void DrawChannelUI(int ch) = 0;
 };
 
 

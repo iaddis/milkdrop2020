@@ -184,7 +184,6 @@ namespace Script { namespace mdpx {
         std::vector<VariablePtr> m_varlist;
         std::unordered_map<std::string, VariablePtr>     m_varmap;
         
-        bool m_showDebugUI = false;
 
     };
     

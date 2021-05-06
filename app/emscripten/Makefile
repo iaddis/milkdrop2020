@@ -4,10 +4,12 @@
 #
 # Makefile for building with emscripten
 # This is intended to be run from the root dir:
-# make -C ../..
+#  make -f app/emscripten/Makefile
 #
 
 CC         = emcc
+
+S3_BUCKET_URL = s3://m1lkdr0p.com/
 
 EMSDK_ROOT = ../emsdk_portable
 EMSDK      = $(EMSDK_ROOT)/emsdk
@@ -17,6 +19,8 @@ CONFIG     ?= release
 BUILD_DIR   = build/emscripten/$(CONFIG)
 OUTPUT_DIR  = $(BUILD_DIR)/bin
 OUTPUT_HTML = $(OUTPUT_DIR)/index.html
+OUTPUT_WASM = $(OUTPUT_DIR)/index.wasm
+OUTPUT_DATA = $(OUTPUT_DIR)/index.data
 EMRUN       = emrun
 BROWSER    ?= chrome
 
@@ -34,16 +38,39 @@ SOURCES += $(shell find app/emscripten -name '*.cpp')
 # include ImGui
 SOURCES += external/imgui/imgui.cpp
 SOURCES += external/imgui/imgui_widgets.cpp
-SOURCES += external/imgui/imgui_impl_sdl.cpp
+SOURCES += external/imgui/backends/imgui_impl_sdl.cpp
 SOURCES += external/imgui/imgui_draw.cpp
 SOURCES += external/imgui/imgui_demo.cpp
+SOURCES += external/imgui/imgui_tables.cpp
 
 SOURCES += $(shell find $(HLSL2GLSL_ROOT)/GLSLCodeGen -name '*.cpp')
 SOURCES += $(shell find $(HLSL2GLSL_ROOT)/MachineIndependent -name '*.cpp')
 SOURCES += $(shell find $(HLSL2GLSL_ROOT)/OSDependent/Emscripten -name '*.cpp')
 
+SOURCES += external/minizip/ioapi.c
+SOURCES += external/minizip/ioapi_buf.c
+SOURCES += external/minizip/ioapi_mem.c
+SOURCES += external/minizip/unzip.c
+SOURCES += external/minizip/zip.c
+
+LZMA_SOURCE_DIR = external/lzma1801/C
+LZMA_SOURCE += ${LZMA_SOURCE_DIR}/Lzma2Dec.c ${LZMA_SOURCE_DIR}/Ppmd7Dec.c ${LZMA_SOURCE_DIR}/Aes.c
+LZMA_SOURCE += ${LZMA_SOURCE_DIR}/Bcj2.c ${LZMA_SOURCE_DIR}/LzFind.c ${LZMA_SOURCE_DIR}/DllSecur.c
+LZMA_SOURCE += ${LZMA_SOURCE_DIR}/Sort.c ${LZMA_SOURCE_DIR}/Ppmd7.c
+LZMA_SOURCE += ${LZMA_SOURCE_DIR}/Bra.c ${LZMA_SOURCE_DIR}/Bra86.c ${LZMA_SOURCE_DIR}/7zArcIn.c
+LZMA_SOURCE += ${LZMA_SOURCE_DIR}/7zAlloc.c ${LZMA_SOURCE_DIR}/Alloc.c ${LZMA_SOURCE_DIR}/LzmaDec.c
+LZMA_SOURCE += ${LZMA_SOURCE_DIR}/Ppmd7Enc.c ${LZMA_SOURCE_DIR}/7zDec.c ${LZMA_SOURCE_DIR}/7zBuf2.c
+LZMA_SOURCE += ${LZMA_SOURCE_DIR}/BraIA64.c ${LZMA_SOURCE_DIR}/Lzma86Dec.c ${LZMA_SOURCE_DIR}/7zStream.c
+LZMA_SOURCE += ${LZMA_SOURCE_DIR}/Sha256.c ${LZMA_SOURCE_DIR}/Delta.c ${LZMA_SOURCE_DIR}/7zFile.c
+LZMA_SOURCE += ${LZMA_SOURCE_DIR}/7zCrc.c ${LZMA_SOURCE_DIR}/AesOpt.c ${LZMA_SOURCE_DIR}/CpuArch.c
+LZMA_SOURCE += ${LZMA_SOURCE_DIR}/7zCrcOpt.c ${LZMA_SOURCE_DIR}/7zBuf.c
+SOURCES += ${LZMA_SOURCE}
+
+INCLUDE_DIRS += external/imgui
+
 
 SOURCES_JS = $(shell find src -name '*.js')
+
 
 INCLUDE_DIRS += $(HLSL2GLSL_ROOT)
 INCLUDE_DIRS += $(HLSL2GLSL_ROOT)/hlslang
@@ -83,6 +110,7 @@ endif
 CC_FLAGS += -DBUILD_CONFIG=$(CONFIG)
 CC_FLAGS += -Wno-deprecated-register
 CC_FLAGS += -s USE_SDL=2
+CC_FLAGS += -s USE_ZLIB
 
 
 #
@@ -90,7 +118,7 @@ CC_FLAGS += -s USE_SDL=2
 #
 
 LD_FLAGS += --preload-file assets 
-LD_FLAGS += --use-preload-plugins 
+# LD_FLAGS += --use-preload-plugins 
 LD_FLAGS += --emrun 
 LD_FLAGS += -s TOTAL_MEMORY=536870912
 LD_FLAGS += -s DEMANGLE_SUPPORT=1
@@ -133,14 +161,6 @@ test:
 clean:
 	rm -Rf $(BUILD_DIR)
 
-.PHONY: emsdk
-emsdk:
-	cd .. ; curl https://s3.amazonaws.com/mozilla-games/emscripten/releases/emsdk-portable.tar.gz | tar -zxvp
-	$(EMSDK) update
-	$(EMSDK) install latest
-	$(EMSDK) activate latest
-
-
 $(OUTPUT_HTML): $(OBJS) $(SHELL_HTML) $(SOURCES_JS) $(MAKEFILE_LIST)
 	@mkdir -p $(@D)
 	@echo Linking $@
@@ -154,11 +174,11 @@ $(BUILD_DIR)/%.c.o: %.c
 $(BUILD_DIR)/%.cpp.o: %.cpp
 	@mkdir -p $(@D)
 	@echo Compiling $<
-	@$(CC) -c $< -o $@ -MMD -std=c++11 $(CC_FLAGS) $(INCLUDE_DIRS:%=-I%) 
+	@$(CC) -c $< -o $@ -MMD -std=c++14 $(CC_FLAGS) $(INCLUDE_DIRS:%=-I%)
 
 .PHONY: deploy
 deploy:
-	aws s3 cp $(OUTPUT_DIR)  s3://soundproof-vancouver/mdp/ --recursive
+	aws s3 cp $(OUTPUT_DIR)  $(S3_BUCKET_URL) --recursive
 
 
 -include $(DEPS)

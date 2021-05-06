@@ -203,7 +203,7 @@ EGlslQualifier translateQualifier( TQualifier qual )
    switch (qual)
    {
    case EvqTemporary:     return EqtNone;
-   case EvqGlobal:        return EqtNone;
+   case EvqGlobal:        return EqtMutableUniform;
    case EvqConst:         return EqtConst;
    case EvqAttribute:     return EqtNone;
    case EvqUniform:       return EqtUniform;

@@ -11,42 +11,21 @@
 
 #include "context.h"
 #include "context_metal.h"
-#include "context_gles.h"
 #include "keycode_osx.h"
 #include "../external/imgui/imgui.h"
-#include "../external/imgui/imgui_impl_osx.h"
+#include "../external/imgui/backends/imgui_impl_osx.h"
 #include "../CommonApple/CommonApple.h"
 #import "../CommonApple/Visualizer.h"
 
 #import "ExternalViewController.h"
 
-bool UseGL = false;
-
-// load texture with GLKit
-static bool LoadTextureFromFile(const char *path, render::gles::GLTextureInfo &ti)
-{
-    NSError *error = nil;
-    GLKTextureInfo *info =[GLKTextureLoader
-                           textureWithContentsOfFile:[NSString stringWithUTF8String:path]
-                           options:nil
-                           error:&error];
-    if (!info)
-        return false;
-    ti.name = info.name;
-    ti.width = info.width;
-    ti.height = info.height;
-    return true;
-}
-
 
 @implementation RenderViewControllerIOS
 {
     MTKView *_metal_view;
-    GLKView *_gl_view;
     UIWindow * _externalWindow;
     ExternalViewController * _externalWindowController;
     render::ContextPtr _context;
-    render::ContextPtr _gl_context;
     render::metal::IMetalContextPtr _metal_context;
     int _screenCount;
 }
@@ -74,14 +53,14 @@ static bool LoadTextureFromFile(const char *path, render::gles::GLTextureInfo &t
     _screenCount = 1;
 
     
-   if (!UseGL)
+//   if (!UseGL)
    {
        [self initMetal];
    }
-   else
-   {
-       [self initGL];
-   }
+//   else
+//   {
+//       [self initGL];
+//   }
    
    self.visualizer = [[Visualizer alloc] initWithContext:_context];
     
@@ -90,6 +69,7 @@ static bool LoadTextureFromFile(const char *path, render::gles::GLTextureInfo &t
     [self setupGestures];
 }
 
+#if 0
 -(void)initGL
 {
     PROFILE_FUNCTION()
@@ -111,12 +91,13 @@ static bool LoadTextureFromFile(const char *path, render::gles::GLTextureInfo &t
     
     [view bindDrawable];
     
-    _gl_context = render::gles::GLCreateContext(LoadTextureFromFile);
+    _gl_context = render::gles::GLCreateContext();
     _gl_context->SetRenderTarget(nullptr);
     
     _context = _gl_context;
 
 }
+#endif
 
 -(void)initMetal
 {

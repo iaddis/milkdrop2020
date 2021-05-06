@@ -1,6 +1,11 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.1)
 
 project(hlsl2glslfork)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 
 set(CMAKE_SUPPRESS_REGENERATION TRUE)
 
@@ -42,6 +47,33 @@ set(GLSL_CODE_GEN_FILES
 )
 source_group("GLSL Code Gen" FILES ${GLSL_CODE_GEN_FILES})
 
+
+set(MSL_CODE_GEN_FILES 
+  hlslang/MetalCodeGen/mslCommon.cpp
+  hlslang/MetalCodeGen/mslFunction.cpp
+  hlslang/MetalCodeGen/mslOutput.cpp
+  hlslang/MetalCodeGen/mslStruct.cpp
+  hlslang/MetalCodeGen/mslSymbol.cpp
+  hlslang/MetalCodeGen/mslCrossCompiler.cpp
+  hlslang/MetalCodeGen/mslLinker.cpp
+  hlslang/MetalCodeGen/mslSupportLib.cpp
+  hlslang/MetalCodeGen/mslPropagateMutable.cpp
+  hlslang/MetalCodeGen/mslTypeSamplers.cpp
+  hlslang/MetalCodeGen/mslCommon.h
+  hlslang/MetalCodeGen/mslFunction.h
+  hlslang/MetalCodeGen/mslOutput.h
+  hlslang/MetalCodeGen/mslStruct.h
+  hlslang/MetalCodeGen/mslSymbol.h
+  hlslang/MetalCodeGen/mslCrossCompiler.h
+  hlslang/MetalCodeGen/mslLinker.h
+  hlslang/MetalCodeGen/mslSupportLib.h
+  hlslang/MetalCodeGen/mslPropagateMutable.h
+  hlslang/MetalCodeGen/mslTypeSamplers.h
+   )
+source_group("Metal Code Gen" FILES ${MSL_CODE_GEN_FILES})
+
+
+
 set(INCLUDE_FILES
   include
 )
@@ -49,7 +81,9 @@ set(INCLUDE_FILES
 source_group("include" FILES ${INCLUDE_FILES})
 
 set(MACHINE_INDEPENDENT_FILES
+  hlslang/MachineIndependent/Gen_hlslang.cpp
   hlslang/MachineIndependent/HLSL2GLSL.cpp
+  hlslang/MachineIndependent/HLSL2MSL.cpp
   hlslang/MachineIndependent/hlslang.l
   hlslang/MachineIndependent/hlslang.y
   hlslang/MachineIndependent/InfoSink.cpp
@@ -91,10 +125,16 @@ if (WIN32)
 endif ()
 
 
+set(GENERATED_DIR
+    ${CMAKE_CURRENT_SOURCE_DIR}/hlslang/MachineIndependent
+    )
+
+include_directories(${GENERATED_DIR})
+
+
 set(MACHINE_INDEPENDENT_GENERATED_SOURCE_FILES
-  ${CMAKE_CURRENT_SOURCE_DIR}/hlslang/MachineIndependent/Gen_hlslang.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/hlslang/MachineIndependent/hlslang_tab.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/hlslang/MachineIndependent/hlslang_tab.h
+  ${GENERATED_DIR}/hlslang_tab.cpp
+  ${GENERATED_DIR}/hlslang_tab.h
 )
 
 SET_SOURCE_FILES_PROPERTIES(${MACHINE_INDEPENDENT_GENERATED_SOURCE_FILES} PROPERTIES
@@ -107,32 +147,11 @@ source_group("Machine Independent\\Generated Source" FILES ${MACHINE_INDEPENDENT
 # Add system specific settings
 if (WIN32)
     set(OSDEPENDENT_FILES
-      hlslang/OSDependent/Windows/main.cpp
       hlslang/OSDependent/Windows/osinclude.h
       hlslang/OSDependent/Windows/ossource.cpp
     )
     source_group("OSDependent\\Windows" FILES ${OSDEPENDENT_FILES})
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/hlslang/OSDependent/Windows)
-    
-    add_custom_command(OUTPUT hlslang/MachineIndependent/Gen_hlslang_tab.cpp hlslang/MachineIndependent/hlslang_tab.h 
-                         COMMAND set ARGS "BISON_SIMPLE=../../tools/bison.simple"
-                         COMMAND set ARGS "BISON_HAIRY=../../tools/bison.simple"
-                         COMMAND ../../tools/bison.exe ARGS  -d -t -v hlslang.y
-                         COMMAND copy ARGS /y hlslang_tab.c Gen_hlslang_tab.cpp
-                         COMMAND del ARGS hlslang_tab.c
-                         COMMAND del ARGS hlslang.output
-                         MAIN_DEPENDENCY hlslang/MachineIndependent/hlslang.y
-                         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/hlslang/MachineIndependent
-                         COMMENT "Executing Bison on hlslang.y"
-                      )
-                   
-    add_custom_command(OUTPUT hlslang/MachineIndependent/Gen_hlslang.cpp
-                         COMMAND ../../tools/flex.exe ARGS hlslang.l
-                         MAIN_DEPENDENCY hlslang/MachineIndependent/hlslang.l
-                         DEPENDS hlslang/MachineIndependent/hlslang_tab.h
-                         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/hlslang/MachineIndependent
-                         COMMENT "Executing flex on hlslang.l"
-                      )
     
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /D\"_HAS_ITERATOR_DEBUGGING=0\" /D\"_SECURE_SCL=0\" /D\"_CRT_SECURE_NO_WARNINGS\"")
     SET(TEST_LIBS opengl32.lib)
@@ -144,51 +163,18 @@ elseif (APPLE)
     source_group("OSDependent\\Mac" FILES ${OSDEPENDENT_FILES})
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/hlslang/OSDependent/Mac)    
 
-    add_custom_command(OUTPUT hlslang/MachineIndependent/Gen_hlslang_tab.cpp hlslang/MachineIndependent/hlslang_tab.h 
-                         COMMAND set ARGS "BISON_SIMPLE=../../tools/bison.simple"
-                         COMMAND set ARGS "BISON_HAIRY=../../tools/bison.simple"
-                         COMMAND bison ARGS -o hlslang_tab.cpp -d -t -v hlslang.y
-                         COMMAND mv hlslang_tab.hpp hlslang_tab.h
-                         MAIN_DEPENDENCY hlslang/MachineIndependent/hlslang.y
-                         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/hlslang/MachineIndependent
-                         COMMENT "Executing Bison on hlslang.y"
-                      )
-                   
-    add_custom_command(OUTPUT hlslang/MachineIndependent/Gen_hlslang.cpp
-                         COMMAND flex ARGS hlslang.l
-                         MAIN_DEPENDENCY hlslang/MachineIndependent/hlslang.l
-                         DEPENDS hlslang/MachineIndependent/hlslang_tab.h
-                         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/hlslang/MachineIndependent
-                         COMMENT "Executing flex on hlslang.l"
-                      )
     FIND_LIBRARY(OPENGL_LIBRARY OpenGL)
 	FIND_LIBRARY(COCOA_LIBRARY Cocoa)
     SET(TEST_LIBS ${OPENGL_LIBRARY} ${COCOA_LIBRARY})
+
 elseif (UNIX)
     set(OSDEPENDENT_FILES
-      hlslang/OSDependent/Linux/osinclude.h
-      hlslang/OSDependent/Linux/ossource.cpp
+      hlslang/OSDependent/Android/osinclude.h
+      hlslang/OSDependent/Android/ossource.cpp
     )
-    source_group("OSDependent\\Linux" FILES ${OSDEPENDENT_FILES})
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/hlslang/OSDependent/Linux)
+    source_group("OSDependent\\Android" FILES ${OSDEPENDENT_FILES})
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/hlslang/OSDependent/Android)
 
-    add_custom_command(OUTPUT hlslang/MachineIndependent/hlslang_tab.cpp hlslang/MachineIndependent/hlslang_tab.h 
-                         COMMAND set ARGS "BISON_SIMPLE=../../tools/bison.simple"
-                         COMMAND set ARGS "BISON_HAIRY=../../tools/bison.simple"
-                         COMMAND bison ARGS -o hlslang_tab.cpp -d -t -v hlslang.y
-                         COMMAND mv hlslang_tab.hpp hlslang_tab.h
-                         MAIN_DEPENDENCY hlslang/MachineIndependent/hlslang.y
-                         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/hlslang/MachineIndependent
-                         COMMENT "Executing Bison on hlslang.y"
-                      )
-                   
-    add_custom_command(OUTPUT hlslang/MachineIndependent/Gen_hlslang.cpp
-                         COMMAND flex ARGS hlslang.l
-                         MAIN_DEPENDENCY hlslang/MachineIndependent/hlslang.l
-                         DEPENDS hlslang/MachineIndependent/hlslang_tab.h
-                         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/hlslang/MachineIndependent
-                         COMMENT "Executing flex on hlslang.l"
-                      )
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb")
     SET(TEST_LIBS GL glut GLEW pthread)
 endif ()
@@ -202,6 +188,7 @@ include_directories(
 add_library(hlsl2glsl 
                 ${HEADER_FILES} 
                 ${GLSL_CODE_GEN_FILES} 
+                ${MSL_CODE_GEN_FILES} 
                 ${INCLUDE_FILES} 
                 ${MACHINE_INDEPENDENT_FILES} 
                 ${MACHINE_INDEPENDENT_CPP_FILES} 
@@ -209,10 +196,15 @@ add_library(hlsl2glsl
                 ${MACHINE_INDEPENDENT_GENERATED_SOURCE_FILES}
            )
 
+if (UNIX)
+target_compile_options(hlsl2glsl PRIVATE "-Wno-register")
+endif()
 
 include_directories(
     ${INCLUDE_FILES} 
 )
-add_executable(hlsl2glsltest tests/hlsl2glsltest/hlsl2glsltest.cpp)
+# add_executable(hlsl2glsltest tests/hlsl2glsltest/hlsl2glsltest.cpp)
+#target_link_libraries(hlsl2glsltest hlsl2glsl ${TEST_LIBS})
+#target_compile_definitions(hlsl2glsltest PUBLIC GL_SILENCE_DEPRECATION) 
 
-target_link_libraries(hlsl2glsltest hlsl2glsl ${TEST_LIBS})
+

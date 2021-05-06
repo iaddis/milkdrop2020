@@ -68,6 +68,8 @@ public:
 	// Code to initialize global matrices when we can't use GLSL 1.20+ syntax
 	std::stringstream& m_DeferredMatrixInit;
 
+    GlslFunction *_deferred_init;
+   
 	TSourceLoc m_LastLineOutput;
 	unsigned swizzleAssignTempCounter;
 	ETargetVersion m_TargetVersion;

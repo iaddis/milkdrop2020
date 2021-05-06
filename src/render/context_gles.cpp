@@ -5,6 +5,8 @@
 #if __APPLE__
 #include <TargetConditionals.h>
 
+#define GL_SILENCE_DEPRECATION
+
 #if TARGET_OS_IPHONE
 #include <OpenGLES/ES3/gl.h>
 #include <OpenGLES/ES3/glext.h>
@@ -53,7 +55,8 @@
 #include <iostream>
 
 #include "../../external/hlsl2glslfork/include/hlsl2glsl.h"
-
+#include "ImageWriter.h"
+#include "ImageReader.h"
 
 namespace render {
 namespace gles {
@@ -204,14 +207,13 @@ public:
 class GLContext : public Context
 {
 public:
-	GLContext(GLTextureLoadFunc textureLoadFunc);
+	GLContext();
 	virtual ~GLContext();
 	
 	
 	
     virtual bool IsSupported(PixelFormat format) override;
 
-	virtual TexturePtr CreateTextureFromFile(const char *name, const char *path) override;
 	virtual TexturePtr CreateRenderTarget(const char *name, int width, int height, PixelFormat format) override;
 	virtual TexturePtr CreateTexture(const char *name, int width, int height, PixelFormat format, const void *data) override;
 	virtual ShaderPtr  CreateShader(const char *name) override;
@@ -316,7 +318,6 @@ public:
     inline float GetPointSize() const {return m_pointsize;}
 protected:
     
-    GLTextureLoadFunc m_textureLoadFunc;
     
     GLTexturePtr        m_renderTarget;
     Size2D              m_renderTargetSize;
@@ -546,7 +547,7 @@ public:
                 glUniformMatrix4fv(m_location, 1, false, m_value.m44);
                 break;
             default:
-                assert(0);
+//                assert(0);
                 break;
         }
     }
@@ -900,8 +901,7 @@ protected:
 //
 
 
-GLContext::GLContext(GLTextureLoadFunc textureLoadFunc)
-    :m_textureLoadFunc(textureLoadFunc)
+GLContext::GLContext()
 {
     LogPrint("GL_VERSION:  %s\n", glGetString(GL_VERSION));
     LogPrint("GL_VENDOR:   %s\n", glGetString(GL_VENDOR));
@@ -1031,15 +1031,17 @@ bool GLContext::IsSupported(PixelFormat format)
             
         case PixelFormat::BGRA8Unorm:
         case PixelFormat::BGRA8Unorm_sRGB:
-        case PixelFormat::RGBA16Unorm:
-        case PixelFormat::RGBA16Snorm:
-        case PixelFormat::RGBA16Float:
 #if EMSCRIPTEN || defined(__ANDROID__)
             return false;
 #else
             return true;
 #endif
-            
+
+        case PixelFormat::RGBA16Unorm:
+        case PixelFormat::RGBA16Snorm:
+        case PixelFormat::RGBA16Float:
+            return false;
+
         case PixelFormat::RGBA32Float:
             return true;
             
@@ -1060,20 +1062,6 @@ bool GLContext::IsSupported(PixelFormat format)
 
 
 
-TexturePtr GLContext::CreateTextureFromFile(const char *name, const char *path)
-{
-    GLTextureInfo ti;
-    if (!m_textureLoadFunc(path, ti))
-    {
-        LogPrint("ERROR: Could not load texture %s\n", path);
-        return nullptr;
-    }
-    
-    LogPrint("Load texture %s (%dx%d)\n", path, ti.width, ti.height);
-    auto texture = std::make_shared<GLTexture>(name, ti.name, ti.width, ti.height, PixelFormat::RGBA8Unorm );
-    return texture;
-	
-}
 
 
 
@@ -1411,9 +1399,9 @@ void GLContext::Clear(Color4F color)
 
 }
 
-ContextPtr GLCreateContext(GLTextureLoadFunc textureLoadFunc)
+ContextPtr GLCreateContext()
 {
-    return std::make_shared<GLContext>(textureLoadFunc);
+    return std::make_shared<GLContext>();
 }
 
 }} // namespace render::gles

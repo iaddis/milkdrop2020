@@ -844,9 +844,9 @@ public:
         writer.Write("displayTimeUnit", "ms");
 
         writer.WriteObject("otherData");
-        writer.Write("platform", PlatformGetName());
+        writer.Write("platform", PlatformGetPlatformName());
         writer.Write("config", PlatformGetBuildConfig());
-        writer.Write("version", PlatformGetVersion());
+        writer.Write("version", PlatformGetAppVersion());
         writer.EndObject();
 
         
@@ -1158,7 +1158,7 @@ public:
         
         name = PlatformGetAppName();
         name += "-";
-        name += PlatformGetName();
+        name += PlatformGetPlatformName();
         if (PlatformIsDebug()) {
             name += "-debug";
         }
@@ -1747,18 +1747,9 @@ public:
     }
     
     
-    
-    void OnGUI(bool *popen)
+    void DrawToolbar()
     {
-        if (!*popen)
-            return;
-
-        if (!ImGui::Begin("Profiler", popen))
-        {
-            ImGui::End();
-            return;
-        }
-
+        
         if (ImGui::Button("Record"))
         {
             m_recording = !m_recording;
@@ -1786,7 +1777,20 @@ public:
             Clear();
         }
 
+        if (PlatformIsDebug())
+        {
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(1,0.2,0.2,1), "WARNING: Profiling debug configuration");
+        }
+
+        
         ImGui::NewLine();
+
+    }
+    
+    void OnGUIPanel()
+    {
+        DrawToolbar();
 
 
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -1821,6 +1825,25 @@ public:
         ImGui::Spacing();
 //        m_report.DrawSummary();
 
+    }
+    
+    
+    void OnGUI(bool *popen)
+    {
+        if (!*popen)
+            return;
+
+        
+        ImGui::SetNextWindowSize (ImVec2(800, 600), ImGuiCond_Once );
+        
+        if (!ImGui::Begin("Profiler", popen))
+        {
+            ImGui::End();
+            return;
+        }
+        
+
+        OnGUIPanel();
         
         ImGui::End();
         
@@ -1845,6 +1868,13 @@ void SkipFrame()
 void OnGUI(bool *popen)
 {
     s_log.OnGUI(popen);
+    
+}
+
+
+void OnGUIPanel()
+{
+    s_log.OnGUIPanel();
     
 }
 

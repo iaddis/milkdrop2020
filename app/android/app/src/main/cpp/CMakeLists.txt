@@ -61,6 +61,7 @@ set(IMGUI_SOURCE
         ${IMGUI_SOURCE_DIR}/imgui_draw.cpp
         ${IMGUI_SOURCE_DIR}/imgui_widgets.cpp
         ${IMGUI_SOURCE_DIR}/imgui_demo.cpp
+        ${IMGUI_SOURCE_DIR}/imgui_tables.cpp
         ${COMMON_SOURCE_DIR}/imgui_support.cpp
         )
 
@@ -68,8 +69,8 @@ set(MDP_SOURCE
         ${COMMON_SOURCE_DIR}/matrix.cpp
         ${COMMON_SOURCE_DIR}/platform.cpp
         ${COMMON_SOURCE_DIR}/path.cpp
-        ${COMMON_SOURCE_DIR}/UnitTests.cpp
         ${COMMON_SOURCE_DIR}/ImageWriter.cpp
+        ${COMMON_SOURCE_DIR}/ImageReader.cpp
         ${COMMON_SOURCE_DIR}/VizController.cpp
         ${COMMON_SOURCE_DIR}/TProfiler.cpp
         ${COMMON_SOURCE_DIR}/vis_milk2/fft.cpp
@@ -96,7 +97,6 @@ set(MDP_SOURCE
         ${COMMON_SOURCE_DIR}/script/mdp-eel2/script-expression.cpp
         ${COMMON_SOURCE_DIR}/script/mdp-eel2/script-yylex.cpp
         ${COMMON_SOURCE_DIR}/script/mdp-eel2/script-kernel.cpp
-        ${COMMON_SOURCE_DIR}/script/mdp-eel2/script-kernel-generated.cpp
       )
 
 
@@ -116,7 +116,6 @@ add_library(mdp SHARED
             ${HLSL2GLSL_SOURCE}
             ${IMGUI_SOURCE}
             android_main.cpp
-            android_textureloader.cpp
           )
 
 # Include libraries needed for lib

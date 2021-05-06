@@ -990,6 +990,15 @@ bool TIntermUnary::promote(TParseContext& ctx)
          return false;
       break;
    case EOpNegative:
+       {
+           if (operand->getBasicType() == EbtBool)
+           {
+               operand = ir_add_conversion (EOpConstructFloat,
+                                            TType (EbtFloat, EbpUndefined, EvqTemporary, 1, 1, false),
+                                            operand,
+                                            ctx.infoSink);
+           }
+       }
    case EOpPostIncrement:
    case EOpPostDecrement:
    case EOpPreIncrement:

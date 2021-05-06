@@ -1324,7 +1324,8 @@ bool TParseContext::executeInitializer(TSourceLoc line, TString& identifier, con
 		// change its type to temporary instead
 		if (initializerQualifier != EvqConst)
 		{
-			qualifier = EvqTemporary;
+//			qualifier = EvqTemporary;
+            qualifier = EvqGlobal;
 			variable->getType().changeQualifier(qualifier);
 		}
 		else if (!isConst)

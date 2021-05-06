@@ -183,7 +183,7 @@ public:
 
     }
     
-    std::string ToString()
+    const char *ToCString()
     {
         return m_stringBuffer.GetString();
     }

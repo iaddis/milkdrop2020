@@ -183,11 +183,11 @@ void insertPost120TextureLookups(CodeMap *lib)
 ////    libExtensions->insert (std::make_pair(EOpTex1DLod, std::make_pair("","GL_ARB_shader_texture_lod"));
 //
 //
-//    lib->insert(EOpTex2DBias,
-//        "float4 xll_tex2Dbias(sampler2D s, float4 coord) {\n"
-//        "  return texture( s, coord.xy, coord.w);\n"
-//        "}\n\n"
-//        );
+    lib->insert(EOpTex2DBias,
+        "float4 xll_tex2Dbias(sampler2D s, float4 coord) {\n"
+        "  return texture( s, coord.xy, coord.w);\n"
+        "}\n\n"
+        );
 //
 //    lib->insert(EOpTex2DLod,
 //        "float4 xll_tex2Dlod(sampler2D s, float4 coord) {\n"
@@ -1060,9 +1060,9 @@ CodeMap * createMetalSupportLibrary(ETargetVersion targetVersion)
     
 	// \todo [pyry] Built-in function exists in GLSL ES 3
 	lib->insert(EOpRound,
-		"float xll_round_f (float x) { return floor (x+0.5); }\n"
-		"float2 xll_round_vf2 (float2 x) { return floor (x+float2(0.5)); }\n"
-		"float3 xll_round_vf3 (float3 x) { return floor (x+float3(0.5)); }\n"
+		"float xll_round(float x) { return floor (x+0.5); }\n"
+		"float2 xll_round(float2 x) { return floor (x+float2(0.5)); }\n"
+		"float3 xll_round(float3 x) { return floor (x+float3(0.5)); }\n"
 		"float4 xll_round(float4 x) { return floor (x+float4(0.5)); }\n"
 	);
 

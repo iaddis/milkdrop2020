@@ -39,6 +39,7 @@ namespace TProfiler
     void AddGPUSpan(SectionPtr section, ProfilerTicks start, ProfilerTicks end);
 
     void OnGUI(bool *popen);
+    void OnGUIPanel();
 
     void NextFrame();
     void SkipFrame();

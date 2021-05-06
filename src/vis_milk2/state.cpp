@@ -193,6 +193,15 @@ static void SplitLines(const std::string &text, std::vector<std::string> &lines)
             begin = pos;
         }
     }
+
+    // add last line
+    if (begin != text.end())
+    {
+        std::string line(begin, pos);
+        if (!line.empty()) {
+            lines.push_back(line);
+        }
+    }
 }
 
 void PresetReader::Parse(const std::string &text)
@@ -1790,7 +1799,7 @@ int  CShape::Import(PresetReader &pr)
 }
 
 
-bool CState::Import(std::string szIniFile, std::string &errors)
+bool CState::ImportFromText(std::string text, std::string name, std::string &errors)
 {
     PROFILE_FUNCTION()
     // if any ApplyFlags are missing, the settings will be copied from pOldState.  =)
@@ -1799,20 +1808,7 @@ bool CState::Import(std::string szIniFile, std::string &errors)
     // apply defaults for the stuff we will overwrite.
     Default();//RandomizePresetVars();
 
-
-    {
-	    // extract a description of the preset from the filename
-        m_path = szIniFile;
-        m_desc = PathRemoveExtension(PathGetFileName(m_path));
-    }
-
-    std::string text;
-    if (!FileReadAllText(szIniFile, text))
-    {
-        errors = "Could not read text file:";
-        errors += szIniFile;
-        return false;
-    }
+    m_desc = name;
 
 	PresetReader pr;
     pr.Parse(text);
@@ -1956,12 +1952,18 @@ bool CState::Import(std::string szIniFile, std::string &errors)
     m_nMinPSVersion = 2; //std::min(m_nWarpPSVersion, m_nCompPSVersion);
     
 	RecompileExpressions();
-#if 0
-    if (!RecompileShaders(errors))
+    
+    if (m_plugin->GetContext()->IsThreaded())
     {
-        return false;
+        RecompileShaders(errors);
+        if (!errors.empty())
+        {
+            LogError("ERROR: Shader compilation '%s'\n%s\n",
+                     GetName().c_str(),
+                     errors.c_str());
+            return false;
+        }
     }
-#endif
 
     errors.clear();
     return true;
@@ -2004,17 +2006,6 @@ int CState::GetHighestBlurTexUsed()
         count = std::max(count, m_shader_warp->highest_blur_used);
     }
     return count;
-}
-
-void CState::GenerateCode(std::string outputDir)
-{
-    m_pervertex_expression->GenerateCPP("pervertex", std::cout);
-    
-    for (auto wave : m_waves)
-    {
-        wave->m_perpoint_expression->GenerateCPP("wave_perpoint", std::cout);
-    }
-    
 }
 
 void CState::GenDefaultWarpShader()

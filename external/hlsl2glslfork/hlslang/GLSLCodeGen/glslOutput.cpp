@@ -362,6 +362,10 @@ TGlslOutputTraverser::TGlslOutputTraverser(TInfoSink& i, std::vector<GlslFunctio
 	// at global scope.
 	global = new GlslFunction( "__global__", "__global__", EgstVoid, EbpUndefined, "", oneSourceLoc);
 	functionList.push_back(global);
+    
+    _deferred_init = new GlslFunction( "__deferred_init__", "__deferred_init__", EgstVoid, EbpUndefined, "", oneSourceLoc);
+    _deferred_init->beginBlock(false);
+
 	current = global;
 }
 
@@ -375,7 +379,7 @@ void TGlslOutputTraverser::traverseArrayDeclarationWithInit(TIntermDeclaration* 
 	TType& type = *decl->getTypePointer();
 	EGlslSymbolType symbol_type = translateType(decl->getTypePointer());
 	
-	const bool emit_120_arrays = (m_TargetVersion >= ETargetGLSL_120);
+    const bool emit_120_arrays = false; //(m_TargetVersion >= ETargetGLSL_120);
 	const bool emit_old_arrays = !emit_120_arrays || m_ArrayInitWorkaround;
 	const bool emit_both = emit_120_arrays && emit_old_arrays;
 	
@@ -412,24 +416,43 @@ void TGlslOutputTraverser::traverseArrayDeclarationWithInit(TIntermDeclaration* 
 			current->setActiveOutput(out);
 		}
 		
-		unsigned n_vals = init.size();
-		for (unsigned i = 0; i != n_vals; ++i) {
-			current->beginStatement();
-			sym->traverse(this);
-			(*out) << "[" << i << "] = ";
-			EGlslSymbolType init_type = translateType(init[i]->getAsTyped()->getTypePointer());
+        
+        unsigned n_vals = init.size();
+        int array_index = 0;
+        for (unsigned i = 0; i < n_vals; ) {
+            current->beginStatement();
+            sym->traverse(this);
+            (*out) << "[" << array_index << "] = ";
+            array_index++;
+            auto init_type = translateType(init[i]->getAsTyped()->getTypePointer());
 
-			bool diffTypes = (symbol_type != init_type);
-			if (diffTypes) {
-				writeType (*out, symbol_type, NULL, EbpUndefined);
-				(*out) << "(";
-			}
-			init[i]->traverse(this);
-			if (diffTypes) {
-				(*out) << ")";
-			}
-			current->endStatement();
-		}
+            bool diffTypes = (symbol_type != init_type);
+            if (diffTypes) {
+                writeType (*out, symbol_type, NULL, EbpUndefined);
+                (*out) << "(";
+            }
+            
+            int numElements = 1;
+            if (symbol_type == EgstFloat4 && init_type == EgstFloat)
+            {
+                // handle float aggregate for float4 init
+                numElements = 4;
+            }
+
+            for (int j=0; j < numElements && i < n_vals; j++)
+            {
+                if (j > 0)
+                    (*out) << ",";
+                init[i++]->traverse(this);
+            }
+            
+
+            if (diffTypes) {
+                (*out) << ")";
+            }
+            current->endStatement();
+        }
+
 		
 		if (sym->isGlobal())
 		{
@@ -540,15 +563,23 @@ bool TGlslOutputTraverser::traverseDeclaration(bool preVisit, TIntermDeclaration
 			// then emit initialization for later until main().
 			if (type.getQualifier() != EvqUniform)
 			{
-				std::stringstream* oldOut = &out;
-				current->pushDepth(0);
-				current->setActiveOutput(&goit->m_DeferredMatrixInit);
-
-				decl->getDeclaration()->traverse(goit);
-				goit->m_DeferredMatrixInit << ";\n";
-
-				current->setActiveOutput(oldOut);
-				current->popDepth();
+                goit->current = goit->_deferred_init;
+                
+                goit->current->beginStatement();
+                decl->getDeclaration()->traverse(goit);
+                goit->current->endStatement();
+                
+                goit->current = current;
+//
+//				std::stringstream* oldOut = &out;
+//				current->pushDepth(0);
+//				current->setActiveOutput(&goit->m_DeferredMatrixInit);
+//
+//				decl->getDeclaration()->traverse(goit);
+//				goit->m_DeferredMatrixInit << ";\n";
+//
+//				current->setActiveOutput(oldOut);
+//				current->popDepth();
 			}
 		}
 	}

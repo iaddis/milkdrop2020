@@ -4,10 +4,8 @@
 #include "vis_milk2/IAudioAnalyzer.h"
 #include "vis_milk2/state.h"
 #include <algorithm>
-
-
+#include "ArchiveReader.h"
 #include "imgui_support.h"
-#include "script/mdp-eel2/script-codegenerator.h"
 #include "ImageWriter.h"
 #include "../external/imgui/imgui_internal.h"
 #include "json.h"
@@ -20,6 +18,12 @@
 #endif
 
 using namespace render;
+
+IAudioSourcePtr OpenNullAudioSource();
+IAudioSourcePtr OpenALAudioSource();
+IAudioSourcePtr OpenSLESAudioSource();
+IAudioSourcePtr OpenUDPAudioSource();
+IAudioSourcePtr OpenAVAudioEngineSource();
 
 
 #if !defined(EMSCRIPTEN)
@@ -110,7 +114,7 @@ void VizController::TestServer()
             writer.EndObject();
             
             
-            std::string str = writer.ToString();
+            std::string str = writer.ToCString();
             
             res.set_content(str, "application/json");
 
@@ -123,9 +127,9 @@ void VizController::TestServer()
             
             std::string action = req.get_param_value("action");
             if (action == "next") {
-                SelectNextPreset(false);
+                NavigateNext();
             } else if (action == "prev") {
-                SelectPrevPreset(false);
+                NavigatePrevious();
             } else if (action == "pause") {
                 TogglePause();
             }
@@ -166,11 +170,83 @@ void VizController::TestServer()
 #endif
 
 
+
+
+class TextureSet : public ITextureSet
+{
+protected:
+    std::mutex _mutex;
+    TexturePtr _selectedTexture;
+    std::map<std::string, render::TexturePtr> _map;
+    
+
+public:
+    virtual render::TexturePtr LookupTexture(const std::string &name) override
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        auto it = _map.find(name);
+        if (it == _map.end())
+            return nullptr;
+        return it->second;
+    }
+    
+    virtual void AddTexture(const std::string &name, render::TexturePtr texture) override
+    {
+        if (!texture) return;
+        
+        std::lock_guard<std::mutex> lock(_mutex);
+        _map[name] = texture;
+        
+        LogPrint("Loaded texture '%s' (%dx%d)\n", name.c_str(), texture->GetWidth(), texture->GetHeight());
+    }
+    
+    virtual void GetTextureListWithPrefix(const std::string &prefix, std::vector<TexturePtr> &list) override
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        
+        list.clear();
+        list.reserve(_map.size());
+        for (const auto &it : _map)
+        {
+            if (prefix.empty() || it.first.find(prefix) == 0)
+            {
+                list.push_back(it.second);
+            }
+        }
+    }
+
+
+    virtual void ShowUI() override
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        
+        ImGui::BeginChild("left pane", ImVec2(400, 0), true);
+        for (const auto &it : _map)
+        {
+            if (ImGui::Selectable( it.first.c_str(), it.second == _selectedTexture)) {
+                _selectedTexture = it.second;
+            }
+        }
+        ImGui::EndChild();
+    
+        ImGui::SameLine();
+    
+        ImGui::BeginChild("right pane", ImVec2(0, 0));
+        if (_selectedTexture)
+        {
+            ImVec2 sz( _selectedTexture->GetWidth(), _selectedTexture->GetHeight());
+            ImGui::Image( _selectedTexture.get(), sz);
+        }
+        ImGui::EndChild();
+    }
+
+};
+
 VizController::VizController(ContextPtr context, std::string assetDir, std::string userDir)
 	: m_context(context), m_assetDir(assetDir), m_userDir(userDir)
 {
     
-#if !defined(EMSCRIPTEN)
+#if !defined(EMSCRIPTEN) && 0
     std::thread thread( [this]() { this->TestServer(); });
     
     thread.detach();
@@ -183,7 +259,7 @@ VizController::VizController(ContextPtr context, std::string assetDir, std::stri
     {
         std::string subdir = PathCombine(m_userDir, "runs/");
   
-        subdir += PlatformGetName();
+        subdir += PlatformGetPlatformName();
         subdir += "-";
         subdir += m_context->GetDriver();
         if (PlatformIsDebug()) {
@@ -197,15 +273,20 @@ VizController::VizController(ContextPtr context, std::string assetDir, std::stri
         
         m_testRunDir  = subdir;
     }
+    
+    m_settingsPath = PathCombine(m_userDir, "settings.json");
+    
+    m_audio_null = OpenNullAudioSource();
+    m_audio_wavfile = m_audio_null;
+    m_audio_microphone = m_audio_null;
 
 
     m_audio = CreateAudioAnalyzer();
     
-    {
-        auto viz = CreateVisualizer(context, m_audio, assetDir);
-        viz->LoadEmptyPreset();
-        m_vizualizer = viz;
-    }
+    m_texture_map = std::make_shared<TextureSet>();
+    
+    m_vizualizer = CreateVisualizer(context, m_audio, m_texture_map, assetDir);
+    m_vizualizer->LoadEmptyPreset();
     
 	m_deltaTime = 1.0f / 60.0f;
 	m_frame     = 0;
@@ -244,18 +325,6 @@ VizController::~VizController()
     
 }
 
-void VizController::SelectRandomPreset()
-{
-//    if (m_presetList.empty())
-//        return;
-//
-//    std::uniform_int_distribution<int> dist(0, (int)(m_presetList.size() - 1) ) ;
-//    int i = dist(m_random_generator);
-//    SelectPreset(i, false);
-//
-    SelectNextPreset(false);
-}
-
 
 
 void VizController::OnTestingComplete()
@@ -267,62 +336,56 @@ void VizController::OnTestingComplete()
     
     m_fTimeBetweenPresets = 8.0f;        // <- this is in addition to m_fBlendTimeAuto
 }
+//
+//bool VizController::SelectPlaylistPreset(int index, bool blend)
+//{
+//    if (index >= (int)m_playlist.size())
+//    {
+//        std::uniform_int_distribution<int> dist(0, (int)(m_presetList.size() - 1) ) ;
+//        for (int i=0; i < 64; i++)
+//        {
+//            int preset_index = dist(m_random_generator);
+//            auto preset = m_presetList[preset_index];
+//            if (!preset->Blacklist)
+//            {
+//                index = (int)m_playlist.size();
+//                m_playlist.push_back(preset);
+//                break;
+//            }
+//        }
+//    }
+//
+//    // select next preset from playlist
+//    if (index >= 0 && index < (int)m_playlist.size() )
+//    {
+//        PresetInfoPtr info = m_playlist[index];
+//        m_playlistPos = index;
+//        LoadPreset(info, blend, false);
+//        return true;
+//    }
+//    return false;
+//}
+//
 
-bool VizController::SelectPlaylistPreset(int index, bool blend)
-{
-    // select next preset from playlist
-    if (index >= 0 && index < (int)m_playlist.size() )
-    {
-        PresetInfoPtr info = m_playlist[index];
-        m_playlistPos = index;
-        LoadPreset(info, blend, false);
-        return true;
-    }
-    return false;
-}
-
-
-void VizController::AddToPlaylist()
-{
-    std::uniform_int_distribution<int> dist(0, (int)(m_presetList.size() - 1) ) ;
-    for (int i=0; i < 64; i++)
-    {
-        int index = dist(m_random_generator);
-        auto preset = m_presetList[index];
-        if (!preset->Blacklist)
-        {
-            m_playlist.push_back(preset);
-        }
-    }
-}
-
-
-void VizController::SelectNextPreset(bool blend)
-{
-    if (!SelectPlaylistPreset( m_playlistPos + 1, blend))
-    {
-        // ran out of playlist entries
-        if (IsTesting())
-         {
-             m_testing = false;
-             OnTestingComplete();
-         }
-        else
-        {
-        }
-
-        // add more stuff to playlist!
-        if (!m_captureScreenshotsFast)
-        AddToPlaylist();
-
-    }
-}
-
-void VizController::SelectPrevPreset(bool blend)
-{
-    SelectPlaylistPreset( m_playlistPos - 1, blend);
-}
-
+//
+//void VizController::SelectNextPreset(bool blend)
+//{
+//
+//
+//    if (!SelectPlaylistPreset( m_playlistPos + 1, blend))
+//    {
+//        // ran out of playlist entries
+//        if (IsTesting())
+//         {
+//             m_testing = false;
+//             OnTestingComplete();
+//         }
+//        else
+//        {
+//        }
+//
+//    }
+//}
 
 bool VizController::SelectPreset(const std::string &name)
 {
@@ -330,25 +393,18 @@ bool VizController::SelectPreset(const std::string &name)
     if (it == m_presetLookup.end())
         return false;
     
-    // insert into preset
-    SelectPreset(it->second, false);
+    bool blend = false;
+    
+    LoadPreset(it->second, blend, true, true);
     return true;
 }
 
-void VizController::SelectPreset(PresetInfoPtr preset, bool blend)
-{
-    // insert into preset
-    m_playlist.insert( m_playlist.begin() + m_playlistPos, preset);
-    
-    SelectPlaylistPreset(m_playlistPos, blend);
-}
 
-PresetTestResultPtr VizController::CaptureTestResult()
+void VizController::CaptureTestResult(PresetTestResult &profile)
 {
-    PresetTestResultPtr profile = std::make_shared<PresetTestResult>();
-    profile->FrameTimes = m_frameTimes;
-    profile->FastFrameCount = 0;
-    profile->SlowFrameCount = 0;
+    profile.FrameTimes = m_frameTimes;
+    profile.FastFrameCount = 0;
+    profile.SlowFrameCount = 0;
     
     float threshold = m_deltaTime * 1.10f * 1000.0f;
     
@@ -357,27 +413,103 @@ PresetTestResultPtr VizController::CaptureTestResult()
     float max = std::numeric_limits<float>::min();
     
     for (auto time : m_frameTimes) {
-        if (time > threshold) profile->SlowFrameCount++;
-        else profile->FastFrameCount++;
+        if (time > threshold) profile.SlowFrameCount++;
+        else profile.FastFrameCount++;
         total += time;
         min = std::min(min, time );
         max = std::max(max, time );
     }
     float average = total / (float)m_frameTimes.size();
-    profile->MinFrameTime = min;
-    profile->MaxFrameTime = max;
-    profile->AveFrameTime = average;
-    profile->SlowPercentage = 100.0f * (float)profile->SlowFrameCount / (float)profile->FrameTimes.size();
-    return profile;
+    profile.MinFrameTime = min;
+    profile.MaxFrameTime = max;
+    profile.AveFrameTime = average;
+    profile.SlowPercentage = 100.0f * (float)profile.SlowFrameCount / (float)profile.FrameTimes.size();
+}
+
+bool VizController::LoadPreset(PresetInfoPtr presetInfo, PresetLoadArgs args)
+{
+    
+    std::string errors;
+    PresetPtr preset = m_vizualizer->LoadPresetFromFile(presetInfo->PresetText, presetInfo->Path, presetInfo->Name, errors);
+    if (!preset)
+    {
+        LogError("Could not load preset '%s'", presetInfo->Path.c_str());
+        LogError("%s", errors.c_str());
+        return false;
+    }
+
+    SetPreset(presetInfo, preset, args);
+    return true;
 }
 
 
-void VizController::LoadPreset(PresetInfoPtr preset, bool blend, bool addToHistory)
+void VizController::LoadPresetAsync(PresetInfoPtr presetInfo, PresetLoadArgs args)
 {
-    if (!preset) {
-        return;
+#if PLATFORM_SUPPORTS_THREADS
+    if (m_LoadPresetFuture.valid()) {
+        m_LoadPresetFuture.wait();
     }
     
+    m_LoadPresetFuture = std::async( std::launch::async,
+              [this, presetInfo, args]() {
+
+                std::string errors;
+                PresetPtr preset = m_vizualizer->LoadPresetFromFile(presetInfo->PresetText, presetInfo->Path, presetInfo->Name, errors);
+                if (preset)
+                {
+                    m_dispatcher.InvokeAsync([=]() {
+                        SetPreset(presetInfo, preset, args);
+                    });
+                }
+              }
+          );
+#else
+    LoadPreset(presetInfo, args);
+#endif
+
+}
+
+bool VizController::LoadPreset(PresetInfoPtr presetInfo, bool blend, bool addToHistory, bool async)
+{
+    if (!presetInfo) {
+        return false;
+    }
+    
+    // determine load arguments
+    float timeDelta = 0.40f;
+    float timeMin =     m_fTimeBetweenPresets * (1.0f - timeDelta);
+    float timeMax =     m_fTimeBetweenPresets * (1.0f + timeDelta);
+
+    std::uniform_real_distribution<float> dist(timeMin, timeMax);
+
+    PresetLoadArgs args;
+    args.addToHistory = addToHistory;
+    args.blendTime = blend ? m_fBlendTimeAuto : 0.0f;
+    args.duration = args.blendTime + dist(m_random_generator);
+    if (m_testing)
+    {
+        args.blendTime = 0.0f;
+        args.duration = 4 / 60.0f;
+    }
+    
+    if (async) {
+        LoadPresetAsync(presetInfo, args);
+        return true;
+    } else {
+        return LoadPreset(presetInfo, args);
+    }
+    
+//
+//
+
+    
+
+}
+
+
+void VizController::SetPreset(PresetInfoPtr presetInfo, PresetPtr preset, PresetLoadArgs args)
+{
+    StopWatch sw;
     if (m_currentPreset && !m_frameTimes.empty())
     {
         if (IsTesting() && m_captureScreenshots)
@@ -386,57 +518,47 @@ void VizController::LoadPreset(PresetInfoPtr preset, bool blend, bool addToHisto
         if (IsTesting() && m_captureProfiles)
         {
             DirectoryCreate(m_testRunDir);
-            std::string path = PathCombine(m_testRunDir, preset->Name);
+            std::string path = PathCombine(m_testRunDir, presetInfo->Name);
             path += ".trace.json";
             
             TProfiler::CaptureToFile(path);
             TProfiler::Clear();
-            
-//            std::string serverUrl;
-//            if (Config::TryGetString("SERVER_URL", &serverUrl)) {
-//              std::string name = PathGetFileName(path);
-//              std::string url = PathCombine(PathCombine(serverUrl, "appdata"), name);
-//              HttpSendFile("POST", url, path.c_str(), true, "application/json", nullptr);
-//            }
         }
 
         // store information for testing
-        m_currentPreset->TestResult = CaptureTestResult();
+        PresetTestResult result;
+        CaptureTestResult(result);
+        m_currentPreset->TestResult = std::make_shared<PresetTestResult>(result);
     }
     m_frameTimes.clear();
 
-    
-    float timeDelta = 0.40f;
-    float timeMin =     m_fTimeBetweenPresets * (1.0f - timeDelta);
-    float timeMax =     m_fTimeBetweenPresets * (1.0f + timeDelta);
+    m_vizualizer->SetPreset(preset, args);
+    m_currentPreset = presetInfo;
 
-
-    std::uniform_real_distribution<float> dist(timeMin, timeMax);
-
-    float blendTime = blend ? m_fBlendTimeAuto : 0.0f;
-    float duration = blendTime + dist(m_random_generator);
-    
-    if (m_testing)
+    if (args.addToHistory)
     {
-        blendTime = 0.0f;
-        //        duration = 4 / 60.0f;
-        duration = 60 / 60.0f;
+        // add to preset history...
+        m_presetHistoryPos = (int)m_presetHistory.size();
+        
+        HistoryEntry entry {
+            .index = m_presetHistoryPos,
+            .time = m_time,
+            .preset = presetInfo,
+            .args = args
+        };
+        m_presetHistory.push_back(entry);
     }
     
     
-    // add to preset history...
+    LogPrint("LoadPreset: (%d/%d) '%s' (load: %fms blend:%fs duration:%.1fs)\n",
+             presetInfo->Index,
+             (int)m_presetList.size(),
+             presetInfo->Name.c_str(),
+             sw.GetElapsedMilliSeconds(),
+             args.blendTime, args.duration );
     
-    m_currentPreset = preset;
     
-    
-    m_vizualizer->LoadPresetAsync(preset->Path.c_str(), blendTime, duration);
-
-
-    
-    m_presetLoadCount++;
-    
-    LogPrint("LoadPreset: '%s' (blend:%fs duration:%.1fs)\n", preset->Name.c_str(), blendTime, duration );
-
+    SaveSettings();
 }
 
 
@@ -446,52 +568,156 @@ void VizController::SelectEmptyPreset()
     m_vizualizer->LoadEmptyPreset();
     m_vizualizer->LoadEmptyPreset();
 }
+//
+//void VizController::TestAllPresets(std::function<void (std::string name, std::string error)> callback)
+//{
+//    int errorCount = 0;
+//    int totalCount = 0;
+//    for (auto preset : m_presetList)
+//    {
+//        //printf("preset[%03d] %s\n", (int)index, name.c_str());
+//        std::string error;
+//        if (!m_vizualizer->TestPreset(preset->Path, error)) {
+//            if (callback)
+//            {
+//                callback(preset->Path, error);
+//                errorCount++;
+//            }
+//        }
+//        
+//        totalCount++;
+//    }
+//    
+//    LogPrint("TestAllPresets (%d/%d)\n", errorCount, totalCount);
+//    
+//}
 
-void VizController::TestAllPresets(std::function<void (std::string name, std::string error)> callback)
+PresetGroupPtr VizController::AddPresetGroup(std::string name)
 {
-    int errorCount = 0;
-    int totalCount = 0;
-    for (auto preset : m_presetList)
+    // group presets based on directory name
+    PresetGroupPtr pgroup;
+    auto it = m_presetGroupMap.find(name);
+    if (it == m_presetGroupMap.end())
     {
-        //printf("preset[%03d] %s\n", (int)index, name.c_str());
-        std::string error;
-        if (!m_vizualizer->TestPreset(preset->Path, error)) {
-            if (callback)
-            {
-                callback(preset->Path, error);
-                errorCount++;
-            }
+        // add new preset group
+        pgroup = std::make_shared<PresetGroup>();
+        pgroup->Name = name;
+        m_presetGroupMap[name] = pgroup;
+        m_presetGroups.push_back(pgroup);
+
+        if (!name.empty())
+        {
+            // resolve preset group
+            auto parent = AddPresetGroup( PathGetDirectory(name) );
+            pgroup->Parent = parent;
+            parent->ChildGroups.push_back(pgroup);
         }
-        
-        totalCount++;
     }
+    else
+    {
+        pgroup = it->second;
+    }
+    return pgroup;
+}
+
+void VizController::AddPreset(std::string path, std::string name, std::string presetText)
+{
+    auto pi = std::make_shared<PresetInfo>(path, name );
     
-    LogPrint("TestAllPresets (%d/%d)\n", errorCount, totalCount);
+    // set preset text...
+    pi->PresetText = presetText;
     
+    m_presetList.push_back(pi);
+    
+    std::string dirname = PathGetDirectory(pi->Name);
+    auto pgroup = AddPresetGroup(dirname);
+    
+    pgroup->Presets.push_back(pi);
 }
 
 
-void VizController::LoadTexturesFromDir(const char *texturedir, bool recurse)
+void VizController::AddPresetsFromArchive(std::string archivePath)
 {
-    std::vector<std::string> files;
-    std::string dir = PathCombine(m_assetDir, texturedir);
-    DirectoryGetFiles(dir, files, true);
+    using namespace Archive;
     
-    for (size_t i = 0; i < files.size(); i++)
-    {
-        std::string path = files[i];
-        
-        auto texture = m_context->CreateTextureFromFile(path.c_str(), path.c_str());
-        if (texture)
-        {
-            printf("LoadTexture: %s %dx%d\n", path.c_str(), texture->GetWidth(), texture->GetHeight());
-        }
-        else
-        {
-            printf("ERROR: Could not load %s\n", path.c_str());
-
-        }
+    StopWatch sw;
+    
+    std::string archiveName = PathGetFileName(archivePath);
+    
+    int count = 0;
+    ArchiveReaderPtr ar = OpenArchive(archivePath);
+    if (!ar) {
+        return;
     }
+    
+    ArchiveFileInfo fi;
+    while (ar->NextFile(fi))
+    {
+        const std::string &name = fi.name;
+    
+        if (name.empty()) continue;
+        if (fi.is_directory) continue;
+        
+        // directory?
+        if (name.back() == '/')
+        {
+            continue;
+        }
+        
+        // hidden file?
+        if (name[0] == '.' || name.find("/.") != std::string::npos)
+        {
+            continue;
+        }
+        
+        std::string ext = PathGetExtensionLower(name);
+        if (ext == ".milk")
+        {
+            std::string text;
+            if (ar->ExtractText(text))
+            {
+                std::string path = archiveName + "/" + name;
+                AddPreset(path, PathRemoveExtension(name), text);
+                count++;
+            }
+            continue;
+        }
+        
+        if (name.find("textures/") != std::string::npos)
+        {
+            // load a texture..
+            std::vector<uint8_t> data;
+            if (ar->ExtractBinary(data))
+            {
+                std::string texname = PathRemoveExtension(PathGetFileName(name));
+                auto texture = m_context->CreateTextureFromFileInMemory(texname.c_str(),
+                                                         data.data(),
+                                                         data.size()
+                                                         );
+                
+                if (texture)
+                {
+                    if (!m_texture_map->LookupTexture(texname))
+                    {
+                        m_texture_map->AddTexture(texname, texture);
+                    }
+                }
+            }
+
+            continue;
+        }
+
+//        printf("%s\n", filename);
+        
+    };
+    
+     
+
+    LogPrint("Added presets from archive '%s' (presets:%d time:%fs)\n",
+             archiveName.c_str(),
+             count,
+             sw.GetElapsedSeconds());
+     
 }
 
 
@@ -501,33 +727,59 @@ void VizController::AddPresetsFromDir(const char *presetdir, bool recurse)
 	std::string dir = PathCombine(m_assetDir, presetdir);
 	DirectoryGetFiles(dir, files, true);
 
-	for (size_t i = 0; i < files.size(); i++)
+    
+    
+	for (auto file : files)
 	{
-        std::string ext = PathGetExtensionLower(files[i]);
+        std::string ext = PathGetExtensionLower(file);
+
+        if (ext == ".zip")
+        {
+            AddPresetsFromArchive(file);
+            continue;
+        }
+
+        if (ext == ".7z")
+        {
+            AddPresetsFromArchive(file);
+            continue;
+        }
         
 		if (ext == ".milk")
 		{
-            std::string path = files[i];
+            std::string path = file;
             std::string name = path.substr(dir.size());
             name = PathRemoveLeadingSlash(name);
             name = PathRemoveExtension(name);
-
-            auto pi = std::make_shared<PresetInfo>(path, name );
-			m_presetList.push_back(pi);
+            
+            AddPreset(path, name, "");
+            continue;
 
 		}
 	}
-    
+
+    std::sort(m_presetGroups.begin(), m_presetGroups.end(),
+              [](const PresetGroupPtr &a, const PresetGroupPtr &b) -> bool{ return a->Name < b->Name; }
+          );
+
     // sort them by name
     std::sort(m_presetList.begin(), m_presetList.end(),
               [](const PresetInfoPtr &a, const PresetInfoPtr &b) -> bool{ return a->SortKey < b->SortKey; }
           );
     
+    for (auto group : m_presetGroups)
+    {
+        std::sort( group->Presets.begin(), group->Presets.end(),
+                  [](const PresetInfoPtr &a, const PresetInfoPtr &b) -> bool{ return a->SortKey < b->SortKey; }
+              );
+
+    }
+    
     // set indices
     for (size_t i=0; i < m_presetList.size(); i++)
     {
         auto preset =        m_presetList[i];
-        preset->Index = (int)i;
+        preset->Index = (int)(i+1);
        // preset->NameWithIndex = StringFormat("[%d] %s", preset->Index, preset->Name.c_str());
         m_presetLookup[preset->Name] = preset;
     }
@@ -537,30 +789,30 @@ void VizController::AddPresetsFromDir(const char *presetdir, bool recurse)
 
 void VizController::TestingStart()
 {
-    m_testing = true;
-    m_captureScreenshots = false;
-    m_captureProfiles = true;
-//    m_selectionLocked = false;
-    
-    m_playlist.clear();
-    m_playlistPos = 0;
-
-    if (m_playlist.empty())
-    {
-        for (auto preset : m_presetList)
-        {
-            if (!preset->TestResult)
-            {
-                m_playlist.push_back(preset);
-            }
-        }
-    }
-    
-    m_fTimeBetweenPresets = 1.0f;
-
-    
-    LogPrint("Testing started\n");
-    SelectNextPreset(false);
+//    m_testing = true;
+//    m_captureScreenshots = false;
+//    m_captureProfiles = true;
+////    m_selectionLocked = false;
+//
+//    m_playlist.clear();
+////    m_playlistPos = 0;
+//
+//    if (m_playlist.empty())
+//    {
+//        for (auto preset : m_presetList)
+//        {
+//            if (!preset->TestResult)
+//            {
+//                m_playlist.push_back(preset);
+//            }
+//        }
+//    }
+//
+//    m_fTimeBetweenPresets = 1.0f;
+//
+//
+//    LogPrint("Testing started\n");
+//    SelectNextPreset(false);
 }
 
 
@@ -575,11 +827,11 @@ std::string VizController::TestingResultsToString()
     writer.Key("metadata");
     writer.StartObject();
     writer.Key("platform");
-    writer.String(PlatformGetName());
+    writer.String(PlatformGetPlatformName());
     writer.Key("config");
     writer.String(PlatformGetBuildConfig());
     writer.Key("version");
-    writer.String(PlatformGetVersion());
+    writer.String(PlatformGetAppVersion());
     writer.EndObject();
 
     
@@ -635,7 +887,7 @@ void VizController::TestingDump()
     std::string name;
     name = PlatformGetAppName();
     name += "-";
-    name += PlatformGetName();
+    name += PlatformGetPlatformName();
     if (PlatformIsDebug()) {
         name += "-debug";
     }
@@ -702,100 +954,6 @@ bool VizController::OnKeyDown(KeyEvent ke)
 
     if (ImGui::IsAnyItemActive())
         return false;
-    
-    bool windowHasFocus =(ImGui::IsAnyWindowFocused());
-
-	switch (ke.code)
-	{
-    case KEYCODE_BACKSPACE:
-        if (!windowHasFocus)
-            NavigateHistoryPrevious();
-        break;
-
-    case KEYCODE_DELETE:
-        BlacklistCurrentPreset();
-        break;
-
-//    case KEYCODE_Z:
-//        RunUnitTests();
-//        break;
-
-    case KEYCODE_L:
-        m_selectionLocked = !m_selectionLocked;
-        break;
-    case KEYCODE_T:
-        if (!m_testing)
-        {
-            TestingStart();
-        }
-        else
-        {
-             TestingAbort();
-        }
-        break;
-            
-        case KEYCODE_K:
-            CaptureAllScreenshots(ke.KeyShift);
-            break;
-            
-//        case KEYCODE_J:
-//        {
-//            m_screenshotCaptureList.push(m_currentPreset);
-//            m_paused = true;
-//        }
-//            break;
-            
-
-                
-
-    case KEYCODE_P:
-        TogglePause();
-		break;
-
-    case KEYCODE_O:
-            
-        if (ke.KeyShift)
-        {
-            TProfiler::CaptureNextFrame();
-        }
-        else
-        {
-            m_showProfiler = !m_showProfiler;
-
-        }
-        break;
-
-            
-    case KEYCODE_LEFT:
-//        if (!windowHasFocus)
-            NavigateHistoryPrevious();
-        break;
-
-    case KEYCODE_RIGHT:
-//        if (!windowHasFocus)
-            NavigateHistoryNext();
-        break;
-
-            
-    case KEYCODE_SPACE:
-//        if (!windowHasFocus)
-            NavigateForward();
-        break;
-
-    case KEYCODE_D:
-            ToggleControlsMenu();
-//        ToggleDebugMenu();
-        break;
-            
-    case KEYCODE_F:
-        if (!windowHasFocus)
-            SingleStep();
-        break;
-	default:
-        if (!windowHasFocus)
-            m_vizualizer->HandleRegularKey(ke.c);
-		break;
-	}
 	return true;
 }
 
@@ -823,21 +981,18 @@ void VizController::OpenInputAudioFile(const char *path)
     if (ext == ".raw")
     {
         IAudioSourcePtr source = OpenRawFileAudioSource(fullPath.c_str());
-        AddAudioSource(source);
+        m_audio_wavfile = source;
     }
     else if (ext == ".wav")
     {
         IAudioSourcePtr source = OpenWavFileAudioSource(fullPath.c_str());
-        AddAudioSource(source);
-
+        m_audio_wavfile = source;
     }
+    
+    m_audioSource = m_audio_wavfile;
 }
 
 
-void VizController::AddAudioSource(IAudioSourcePtr source)
-{
-    m_audioSourceList.push_back(source);
-}
 
 
 void VizController::SingleStep()
@@ -857,67 +1012,131 @@ void VizController::BlacklistCurrentPreset()
     if (!m_currentPreset) return;
     
     m_currentPreset->Blacklist = true;
+    NavigateRandom();
 }
 
 
-void VizController::NavigateHistoryPrevious()
+void VizController::NavigatePrevious()
 {
-    SetSelectionLock(true);
-    SelectPrevPreset(false);
-}
-
-void VizController::NavigateHistoryNext()
-{
+    if (m_presetHistory.empty())
+        return;
+    
     m_paused = false;
     SetSelectionLock(true);
-    SelectNextPreset(false);
+    
+    int index = m_presetHistoryPos - 1;
+    if (index < 0 || index >= m_presetHistory.size())
+        return;
+    
+    auto preset = m_presetHistory[index].preset;
+    LoadPreset(preset, false, false, false);
+    
+    m_presetHistoryPos = index;
+}
+
+void VizController::NavigateNext()
+{
+    int index = m_presetHistoryPos + 1;
+    if (index >= m_presetHistory.size())
+    {
+        NavigateRandom();
+        return;
+    }
+ 
+    
+    m_paused = false;
+    SetSelectionLock(true);
+    auto preset = m_presetHistory[index].preset;
+    LoadPreset(preset, false, false, false);
+    
+    m_presetHistoryPos = index;
 }
 
 
-void VizController::NavigateForward()
+void VizController::NavigateRandom()
 {
     m_paused = false;
 
     SetSelectionLock(false);
-    SelectNextPreset(false);
+
+    if (m_presetList.empty())
+        return;
+    
+    std::uniform_int_distribution<int> dist(0, (int)(m_presetList.size() - 1) ) ;
+    for (int i=0; i < 64; i++)
+    {
+        int preset_index = dist(m_random_generator);
+        auto preset = m_presetList[preset_index];
+        if (!preset->Blacklist)
+        {
+            LoadPreset(preset, true, true, true);
+            break;
+        }
+    }
 }
 
 
-extern bool UsePrecompiledKernels;
 extern bool UseQuadLines;
 
 
 static bool ToolbarButton(const char *id, const char *tooltip)
 {
-    ImVec2 bsize(64,64);
+    float size = 48;
+//    ImVec2 bsize(64, 64);
+    ImVec2 bsize(size,size);
+
+//    const ImVec2 label_size = ImGui::CalcTextSize(id, NULL, true);
     
     ImGui::SameLine();
     
-    bool result = ImGui::Button(id, bsize);
+//    ImGui::BeginChild(id, bsize, true, ImGuiWindowFlags_NoScrollbar);
+    
+    auto fy = ImGui::GetStyle().FramePadding;
+    auto bta = ImGui::GetStyle().ButtonTextAlign;
+//    auto fr = ImGui::GetStyle().FrameRounding;
+    ImGui::GetStyle().FramePadding = ImVec2(10, 10);
+    ImGui::GetStyle().ButtonTextAlign = ImVec2(0.5, 1.0);
+
+//    ImGui::GetStyle().ButtonTextAlign.x = 0.5;
+//    ImGui::GetStyle().ButtonTextAlign.y = 0.90;
+
+    
+    
+//    ImGui::GetStyle().FrameRounding = 0.5;
+//    ImGui::GetStyle().FramePadding.y = 0;
+    bool result = ImGui::ButtonEx(id, bsize, ImGuiButtonFlags_None) ;//ImGuiButtonFlags_AlignTextBaseLine);
+    
+//    ImGui::GetStyle().FrameRounding = fr;
+    ImGui::GetStyle().FramePadding = fy;
+    ImGui::GetStyle().ButtonTextAlign = bta;
+    
+//    bool result = ImGui::SmallButton(id);
     if (ImGui::IsItemHovered())
          ImGui::SetTooltip("%s", tooltip);
+    
+//    ImGui::EndChild();
     return result;
 }
 
-static bool ToolbarToggleButton(const char *id, bool toggle, const char *tooltip)
-{
-    if (toggle)
-          ImGui::PushStyleColor(ImGuiCol_Button,
-                                       ImGui::GetColorU32(ImGuiCol_ButtonActive)
-                                       );
-    
-    bool result = ToolbarButton(id, tooltip);
-    
-    if (toggle)
-        ImGui::PopStyleColor(1);
-    
-    return result;
+//static bool ToolbarToggleButton(const char *id, bool toggle, const char *tooltip)
+//{
+//    if (toggle)
+//          ImGui::PushStyleColor(ImGuiCol_Button,
+//                                       ImGui::GetColorU32(ImGuiCol_ButtonActive)
+//                                       );
+//
+//    bool result = ToolbarButton(id, tooltip);
+//
+//    if (toggle)
+//        ImGui::PopStyleColor(1);
+//
+//    return result;
+//
+//}
 
-}
-
-static void ToolbarSeparator()
+static void ToolbarSeparator(float width = 64)
 {
-    ImVec2 bsize(64,64);
+    ImVec2 bsize(width,64);
     ImGui::SameLine();
     ImGui::InvisibleButton("seperator2", ImVec2(bsize.x / 2,  -1.0f));
 
@@ -927,9 +1146,13 @@ void VizController::DrawTitleWindow()
 {
     #if 1
         {
-            ImGui::SetNextWindowPos(ImVec2(20, 10), ImGuiCond_Always, ImVec2(0.0f, 0.0f));
-            ImGui::SetNextWindowContentSize (ImVec2(ImGui::GetIO().DisplaySize.x - 80, 0) );
-            if (ImGui::Begin("MilkdropStatus", &m_showControls, 0
+            
+            ImVec2 pos(20, 10);
+            ImVec2 margin(20, 20);
+            ImGui::SetNextWindowPos(pos, ImGuiCond_Always, ImVec2(0.0f, 0.0f));
+            ImGui::SetNextWindowSize (ImVec2(ImGui::GetIO().DisplaySize.x - pos.x - margin.x, 0) );
+//            ImGui::SetNextWindowContentSize (ImVec2(ImGui::GetIO().DisplaySize.x - 80, 0) );
+            if (ImGui::Begin("MilkdropStatus", &m_showUI, 0
                              | ImGuiWindowFlags_NoMove
                              | ImGuiWindowFlags_NoDecoration
                              |  ImGuiWindowFlags_NoTitleBar
@@ -942,8 +1165,17 @@ void VizController::DrawTitleWindow()
                              ))
             {
                 {
-                    auto &presetName = m_vizualizer->GetPresetName();
-                    ImGui::TextWrapped("%s\n", presetName.c_str());
+  //                  auto &presetName = m_vizualizer->GetPresetName();
+//                    ImGui::TextWrapped("%s\n", presetName.c_str());
+
+                    if (m_currentPreset)
+                    {
+                        ImGui::TextWrapped("(%d/%d) %s\n",
+                                           m_currentPreset->Index,
+                                           (int)m_presetList.size(),
+                                           m_currentPreset->Name.c_str());
+
+                    }
                 }
                 
             }
@@ -951,39 +1183,6 @@ void VizController::DrawTitleWindow()
             
         }
     #endif
-    
-//    m_audio->DrawStatsUI();
-
-    #if 0
-           {
-               ImGui::SetNextWindowPos(ImVec2(20, 300), ImGuiCond_Always, ImVec2(0.0f, 0.0f));
-               ImGui::SetNextWindowContentWidth(  ImGui::GetIO().DisplaySize.x - 80);
-               if (ImGui::Begin("PerfHUD", &m_showControls, 0
-                                | ImGuiWindowFlags_NoMove
-                                | ImGuiWindowFlags_NoDecoration
-                                |  ImGuiWindowFlags_NoTitleBar
-                                //                         | ImGuiWindowFlags_NoResize
-                                | ImGuiWindowFlags_NoScrollbar
-                                | ImGuiWindowFlags_AlwaysAutoResize
-                                | ImGuiWindowFlags_NoSavedSettings
-                                | ImGuiWindowFlags_NoFocusOnAppearing
-                                | ImGuiWindowFlags_NoNav
-                                ))
-               {
-                   {
-                       
-                       int w = 128;
-                       size_t count = m_frameTimes.size();
-                       if (count > w) count = w;
-                 ImGui::PlotLines("Lines", m_frameTimes.data() + m_frameTimes.size() - count, (int)count,
-                                          0, "", 0.0f, 64.0f, ImVec2(0,80));
-                   }
-                   
-               }
-               ImGui::End();
-               
-           }
-       #endif
   
 
 }
@@ -992,16 +1191,22 @@ void VizController::DrawTitleWindow()
 void VizController::DrawControlsWindow()
 {
     {
-  
-        ImGui::SetNextWindowPos(ImVec2(20, 50), ImGuiCond_Always, ImVec2(0.0f, 0.0f));
-//        ImGui::SetNextWindowContentWidth(  ImGui::GetIO().DisplaySize.x - 80);
+
+        
+        ImVec2 pos(20, 50);
+        ImVec2 margin(20, 20);
+        ImGui::SetNextWindowPos(pos, ImGuiCond_Always, ImVec2(0.0f, 0.0f));
+        ImGui::SetNextWindowSize (ImVec2(ImGui::GetIO().DisplaySize.x - pos.x - margin.x, 0) );
+
+        
+        //        ImGui::SetNextWindowContentWidth(  ImGui::GetIO().DisplaySize.x - 80);
 
 //        ImGui::SetNextWindowPos(ImVec2(20, ImGui::GetIO().DisplaySize.y - 60), ImGuiCond_Always, ImVec2(0.0f, 0.0f));
 //        ImGui::SetNextWindowContentWidth(800);
         if (ImGui::Begin(
                          //m_currentPreset->Name.c_str(),
                          "MilkdropControls",
-                         &m_showControls, 0
+                         &m_showUI, 0
                          | ImGuiWindowFlags_NoMove
                          | ImGuiWindowFlags_NoDecoration
                          |  ImGuiWindowFlags_NoTitleBar
@@ -1015,37 +1220,84 @@ void VizController::DrawControlsWindow()
         {
             //                    ImGui::PushFont(g_font_awesome);
             
-            ImGui::SetWindowFontScale(2.0f);
+            ImGui::SetWindowFontScale(1.0f);
+            
+            
+            if (ToolbarButton(ICON_FA_COG,"Toggle settings"))
+            {
+                ToggleSettingsMenu();
+            }
+            
+            ToolbarSeparator();
+            
+            if (ToolbarButton(m_selectionLocked ? ICON_FA_LOCK : ICON_FA_UNLOCK,"Lock preset switching"))
+            {
+                m_selectionLocked = !m_selectionLocked;
+                m_paused = false;
+            }
             
 
             
-            if (ToolbarButton(ICON_FA_BACKWARD,"Go to previous preset"))
+            if (ToolbarButton(ICON_FA_ARROW_LEFT,"Select previous preset"))
             {
-                NavigateHistoryPrevious();
-                m_paused = false;
+                NavigatePrevious();
                 
             }
 
             
-            if (ToolbarButton(ICON_FA_FORWARD,"Go to next preset"))
+            if (ToolbarButton(ICON_FA_ARROW_RIGHT,"Select next preset"))
                 
             {
-                NavigateHistoryNext();
-                m_paused = false;
+                NavigateNext();
             }
-
+            
+            if (ToolbarButton(ICON_FA_RANDOM,"Select random preset"))
+                
+            {
+                NavigateRandom();
+            }
             
             
             if (ToolbarButton(!m_paused ? ICON_FA_PAUSE : ICON_FA_PLAY,"Pause visualizer"))
             {
                 TogglePause();
             }
-            
-            
-            if (ToolbarButton(ICON_FA_STEP_FORWARD,"Step a single preset frame"))
+
+            ToolbarSeparator();
+
+            if (ToolbarButton(ICON_FA_THUMBS_DOWN,"Blacklist preset"))
             {
-                SingleStep();
+                BlacklistCurrentPreset();
             }
+
+            if (ToolbarButton(ICON_FA_THUMBS_UP,"Add preset to favorites"))
+            {
+//                BlacklistCurrentPreset();
+            }
+
+
+            if (ToolbarButton(ICON_FA_BUG, "Flag preset as bugged"))
+            {
+//                BlacklistCurrentPreset();
+            }
+
+
+            ToolbarSeparator();
+
+//            if (ToolbarButton(ICON_FA_THUMBS_UP,""))
+//            {
+////                TogglePause();
+//            }
+//
+
+            
+//
+//
+//
+//            if (ToolbarButton(ICON_FA_STEP_FORWARD,"Step a single preset frame"))
+//            {
+//                SingleStep();
+//            }
 
             
             //
@@ -1058,65 +1310,61 @@ void VizController::DrawControlsWindow()
             
             
             
-            if (ToolbarButton(m_selectionLocked ? ICON_FA_LOCK : ICON_FA_UNLOCK,"Lock or unlock preset switching"))
-            {
-                m_selectionLocked = !m_selectionLocked;
-                m_paused = false;
-            }
-            
-            
             ToolbarSeparator();
             
+//
+//            if (ToolbarToggleButton(ICON_FA_SIGN_IN, IsTesting(), "Toggle testing mode"))
+//            {
+//                if (!IsTesting())
+//                    TestingStart();
+//                else
+//                    TestingAbort();
+//            }
+//
+//            if (ToolbarButton(ICON_FA_CAMERA,"Capture screenshot"))
+//            {
+//                CaptureScreenshot();
+//            }
+//
+////            if (ToolbarButton(ICON_FA_CLOCK_O, "Capture performance profile"))
+//            if (ToolbarButton(ICON_FA_CLOCK_O, "Profiler"))
+//            {
+//                m_showProfiler = !m_showProfiler;
+////                TProfiler::CaptureNextFrame();
+//            }
+//
+//
+//
+//
             
-            if (ToolbarToggleButton(ICON_FA_SIGN_IN, IsTesting(), "Toggle testing mode"))
-            {
-                if (!IsTesting())
-                    TestingStart();
-                else
-                    TestingAbort();
-            }
             
-            if (ToolbarButton(ICON_FA_CAMERA,"Capture screenshot"))
-            {
-                CaptureScreenshot();
-            }
-
-//            if (ToolbarButton(ICON_FA_CLOCK_O, "Capture performance profile"))
-            if (ToolbarButton(ICON_FA_CLOCK_O, "Profiler"))
-            {
-                m_showProfiler = !m_showProfiler;
-//                TProfiler::CaptureNextFrame();
-            }
-
-
-            
-            
-            
-            /*
-            if (m_audioSourceList.size() >= 3)
             {
                 ImGui::SameLine();
-                bool microphone = m_audioSourceIndex == 2;
-                if (ImGui::Button(microphone ? ICON_FA_MICROPHONE : ICON_FA_MICROPHONE_SLASH,bsize))
+                bool microphone = m_audioSource == m_audio_microphone;
+                if (ToolbarButton(microphone ? ICON_FA_MICROPHONE : ICON_FA_MICROPHONE_SLASH, "Enable microphone"))
                 {
-                    if (microphone)
-                        SelectAudioSource(1);
-                    else
-                        SelectAudioSource(2);
+                    if (microphone) {
+                        m_audioSource = m_audio_wavfile;
+                    } else {
+                        m_audioSource = m_audio_microphone;
+                    }
                 }
             }
-             */
+             
             
             
+          
             
-            if (ToolbarButton(ICON_FA_COG,"Toggle debug UI"))
-            {
-                ToggleDebugMenu();
-            }
+//            auto pos = ImGui::GetCursorPos();
+//            auto sz = ImGui::GetWindowSize();
+//
+            
+//            ToolbarSeparator(sz.x - pos.x - 64);
             
             
-            ToolbarSeparator();
-            
+//            pos.x = sz.x - 80;
+//            ImGui::SetCursorPos(pos);
+//
             if (ToolbarButton(ICON_FA_TIMES,"Close controls"))
             {
                 ToggleControlsMenu();
@@ -1134,117 +1382,253 @@ void VizController::DrawControlsWindow()
 
 
 
-void VizController::DrawStatusWindow()
+static void TableNameValue(const char *name, const char *format, ...)
 {
-    static bool show_demo_window = false;
+    char str[64 * 1024];
+    
+    va_list arglist;
+    va_start(arglist, format);
+    int count = vsnprintf(str, sizeof(str), format, arglist);
+    va_end(arglist);
+    (void)count;
+    str[sizeof(str) - 1] = '\0';
+
+    
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    ImGui::TextUnformatted(name);
+    ImGui::TableSetColumnIndex(1);
+    ImGui::TextUnformatted(str);
+}
+
+
+
+void VizController::DrawPresetSelector()
+{
+    PresetInfoPtr &selected = m_currentPreset;
+    
+    bool presetFilterUpdate = false;
+
+    if (m_presetFilter.Draw("Filter")) presetFilterUpdate = true;
+
+    
+    if (presetFilterUpdate || m_presetListFiltered.empty())
+    {
+        if (!m_presetFilter.IsActive())
+        {
+            m_presetListFiltered = m_presetList;
+        }
+        else
+        {
+            m_presetListFiltered.clear();
+            for (auto preset : m_presetList)
+            {
+                if (m_presetFilter.PassFilter(preset->Name.c_str()))
+                {
+                    m_presetListFiltered.push_back(preset);
+                }
+            }
+            
+        }
+
+    }
+   
+    ImGuiTableFlags flags =
+    ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV
+    | ImGuiTableFlags_ScrollY
+         | ImGuiTableFlags_RowBg
+
+    //        | ImGuiTableFlags_ColumnsWidthFixed
+    ; // | ImGuiTableFlags_ContextMenuInBody;
+    
+//    ImVec2 sz = ImGui::GetContentRegionAvail();
+    if (ImGui::BeginTable("##presets", 3, flags))
+    {
+        
+        ImGui::TableSetColumnWidth(0, 40 );
+        //                ImGui::TableSetColumnWidth(1, 800 );
+        
+        ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
+        ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_None);
+        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None);
+        ImGui::TableSetupColumn("Results", ImGuiTableColumnFlags_None);
+        ImGui::TableHeadersRow();
+
+        
+        ImGuiListClipper clipper((int)m_presetListFiltered.size(),   ImGui::GetTextLineHeightWithSpacing() );
+        while (clipper.Step())
+        {
+            for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
+            {
+                auto preset = m_presetListFiltered[i];
+                bool is_selected = (preset == selected);
+                
+                
+                ImGui::TableNextColumn();
+                ImGui::Text("%d",  preset->Index );
+                
+                
+                ImGui::TableNextColumn();
+                if (ImGui::Selectable(preset->Name.c_str(), is_selected, ImGuiSelectableFlags_SpanAllColumns))
+                {
+                    LoadPreset(preset, false, true, true);
+                    selected = preset;
+                }
+                
+                if (is_selected)
+                    ImGui::SetItemDefaultFocus();
+                
+                
+                ImGui::TableNextColumn();
+                
+                if (is_selected)
+                {
+                    float progress = m_vizualizer->GetPresetProgress();
+                    
+                    ImGui::ProgressBar(progress, ImVec2(128.0f, ImGui::GetTextLineHeight() ));
+
+                    ImGui::SameLine();
+//                    ImGui::Text(" *** active *** (%3.1f%%)",
+//                                progress * 100.0f
+//                                );
+
+                } else
+                
+                if (preset->TestResult)
+                {
+                    auto profile = preset->TestResult;
+                    
+                    ImGui::Text("frametime:%3.2f fast:%d slow:%d (%.2f%%)",
+                                profile->AveFrameTime,
+                                profile->FastFrameCount,
+                                profile->SlowFrameCount,
+                                profile->SlowPercentage
+                                );
+                }
+                
+            }
+        }
+        
+        ImGui::EndTable();
+    }
+    
+//            ImGui::EndChild();
+
+
+}
+
+
+void VizController::DrawSettingsWindow()
+{
 
     const char *appName = PlatformGetAppName();
     
-    ImGui::SetNextWindowPos(ImVec2(20, 140), ImGuiCond_Once, ImVec2(0.0f, 0.0f));
-    ImGui::SetNextWindowContentSize (ImVec2(800, 0) );
-    if (ImGui::Begin(appName, &m_showDebug, 0
-//                     | ImGuiWindowFlags_NoMove
+    ImVec2 pos(20, 120);
+    ImVec2 margin(20, 20
+                  );
+    ImGui::SetNextWindowPos(pos, ImGuiCond_Once, ImVec2(0.0f, 0.0f));
+//    ImGui::SetNextWindowContentSize (ImVec2(800, 0) );
+//    ImGui::SetNextWindowContentSize (ImVec2(ImGui::GetIO().DisplaySize.x - 80, ImGui::GetIO().DisplaySize.y - 180) );
+
+    ImGui::SetNextWindowSize (ImVec2(ImGui::GetIO().DisplaySize.x - pos.x - margin.x, ImGui::GetIO().DisplaySize.y - pos.y - margin.y) );
+
+    if (!ImGui::Begin(appName, &m_showSettings, 0
+                     | ImGuiWindowFlags_NoMove
 //                     | ImGuiWindowFlags_NoDecoration
-//                   |  ImGuiWindowFlags_NoTitleBar
-//                     | ImGuiWindowFlags_NoResize
-//                     | ImGuiWindowFlags_NoScrollbar
+                   |  ImGuiWindowFlags_NoTitleBar
+                     | ImGuiWindowFlags_NoResize
+                     | ImGuiWindowFlags_NoScrollbar
 //                     | ImGuiWindowFlags_AlwaysAutoResize
                      | ImGuiWindowFlags_NoSavedSettings
                      | ImGuiWindowFlags_NoFocusOnAppearing
-                     | ImGuiWindowFlags_MenuBar
+//                     | ImGuiWindowFlags_MenuBar
                      | ImGuiWindowFlags_NoNav
                      ))
     {
-        // Menu Bar
-        if (ImGui::BeginMenuBar())
+        ImGui::End();
+        return;
+    }
+    
+    static bool showMenu = false;
+    
+    // Menu Bar
+    if (showMenu && ImGui::BeginMenuBar())
+    {
+
+        if (ImGui::BeginMenu("View"))
         {
-
-            if (ImGui::BeginMenu("View"))
+            
+             
+            if (ImGui::MenuItem("Preset Editor"))
             {
-                
-                ImGui::MenuItem("Preset Playlist", NULL, &m_showPlayList);
-                ImGui::MenuItem("Preset Selector", NULL, &m_showPresetSelector);
-                
-                if (ImGui::MenuItem("Preset Editor"))
-                {
-                    m_vizualizer->ShowPresetEditor();
-                }
-                
-                if (ImGui::MenuItem("Preset Debugger"))
-                {
-                    m_vizualizer->ShowPresetDebugger();
-                }
-                
-                ImGui::MenuItem("Audio Analyzer", NULL, &m_showAudioWindow);
-                ImGui::MenuItem("Log Window", NULL, &m_showLogWindow);
-                ImGui::MenuItem("Profiler", "P", &m_showProfiler);
-                ImGui::MenuItem("ImGui Demo Window", NULL, &show_demo_window);
-                
-
-                ImGui::EndMenu();
+                m_vizualizer->ShowPresetEditor();
             }
             
-            if (ImGui::BeginMenu("Debug"))
+            if (ImGui::MenuItem("Preset Debugger"))
             {
-                
-                if (ImGui::MenuItem("Load Empty Preset"))
-                {
-                    SelectEmptyPreset();
-                }
-                
+                m_vizualizer->ShowPresetDebugger();
+            }
+            
+            ImGui::MenuItem("Profiler", "P", &m_showProfiler);
+            ImGui::MenuItem("ImGui Demo Window", NULL, &m_showDemoWindow);
+            
+
+            ImGui::EndMenu();
+        }
+        
+        if (ImGui::BeginMenu("Debug"))
+        {
+            
+            if (ImGui::MenuItem("Load Empty Preset"))
+            {
+                SelectEmptyPreset();
+            }
+            
 //                if (ImGui::MenuItem("Run Unit Tests"))
 //                {
 //                    RunUnitTests();
 //                }
-        
-                if (ImGui::MenuItem("Capture Screenshot"))
+    
+            if (ImGui::MenuItem("Capture Screenshot"))
+            {
+                CaptureScreenshot();
+            }
+    
+            bool testing = IsTesting();
+            if (ImGui::MenuItem("Test All Presets", NULL, &testing))
+            {
+                if (!IsTesting())
                 {
-                    CaptureScreenshot();
-                }
-        
-                bool testing = IsTesting();
-                if (ImGui::MenuItem("Test All Presets", NULL, &testing))
+                    TestingStart();
+                } else
                 {
-                    if (!IsTesting())
-                    {
-                        TestingStart();
-                    } else
-                    {
-                        TestingAbort();
-                    }
+                    TestingAbort();
                 }
-                
-                if (ImGui::MenuItem("Capture All Screenshots"))
-                {
-                    CaptureAllScreenshots(false);
-                }
+            }
+            
+            if (ImGui::MenuItem("Capture All Screenshots"))
+            {
+                CaptureAllScreenshots(false);
+            }
 
-                if (ImGui::MenuItem("Force Capture All Screenshots"))
-                            {
-                                CaptureAllScreenshots(true);
-                            }
+            if (ImGui::MenuItem("Force Capture All Screenshots"))
+                        {
+                            CaptureAllScreenshots(true);
+                        }
 
-                
+            
 
-                if (ImGui::MenuItem("Generate Preset CPP Code"))
-                {
-                    GeneratePresetCPPCode();
-                }
-                
 
-                
+            
 
-                
-                ImGui::MenuItem("Use Prebuilt Kernels", NULL, &UsePrecompiledKernels);
-
-                ImGui::MenuItem("Use Quad Line Renderer", NULL, &UseQuadLines);
+            ImGui::MenuItem("Use Quad Line Renderer", NULL, &UseQuadLines);
 //                ImGui::MenuItem("Use Correct Blur", NULL, &UseCorrectBlur);
 
 //                ImGui::MenuItem("Metrics", NULL, &show_app_metrics);
 //                ImGui::MenuItem("Style Editor", NULL, &show_app_style_editor);
 //                ImGui::MenuItem("About Dear ImGui", NULL, &show_app_about);
-                ImGui::EndMenu();
-            }
+            ImGui::EndMenu();
+        }
 
 //            if (ImGui::BeginMenu("Help"))
 //            {
@@ -1253,112 +1637,431 @@ void VizController::DrawStatusWindow()
 //                ImGui::MenuItem("About Dear ImGui", NULL, &show_app_about);
 //                ImGui::EndMenu();
 //            }
-            ImGui::EndMenuBar();
-        }
+        ImGui::EndMenuBar();
+    }
+    
+    DrawSettingsTabs();
+    
+    
+    
+    
+    
+    ImGui::End();
+   
+}
 
-        
-        
-        ImGui::Columns(2, "stats_columns", true);
-        ImGui::SetColumnWidth(0, 150);
-//        ImGui::SetColumnWidth(1, 350);
 
-        //ImGui::TextColumn("App\t%s\t", PlatformGetAppName() );
-        ImGui::TextColumn("Platform\t%s\t", PlatformGetName() );
-        ImGui::TextColumn("Version\t%s\t", PlatformGetVersion() );
-        ImGui::TextColumn("Config\t%s\t",  PlatformGetBuildConfig() );
-        ImGui::TextColumn("Device\t%s\t", PlatformGetDeviceModel() );
 
-//        ImGui::TextColumn("Preset Count\t%d\t", m_presetLoadCount );
-//        ImGui::TextColumn("Frame Count\t%d\t", m_frame );
-        ImGui::TextColumn("Frame Rate\t%3.2f\t", 1000.0f / m_frameTime );
-        ImGui::TextColumn("FrameTime\t%3.2fms\t", m_frameTime );
-        ImGui::TextColumn("RenderTime\t%3.2fms\t", m_renderTime );
+void VizController::DrawPanel_About()
+{
+    int table_flags =
+    ImGuiTableFlags_BordersInnerV|
+    ImGuiTableFlags_ColumnsWidthFixed
+    ;
+    
+    if (ImGui::BeginTable("##stats_columns", 2, table_flags))
+    {
+        //            ImGui::TableNextRow();
+        ImGui::TableNextColumn();
         
+        //TableNameValue("App", "%s", PlatformGetAppName() );
+        TableNameValue("Platform", "%s", PlatformGetPlatformName() );
+        TableNameValue("App Version", "%s", PlatformGetAppVersion() );
+        TableNameValue("Build Config", "%s",  PlatformGetBuildConfig() );
+        TableNameValue("Device Model", "%s", PlatformGetDeviceModel() );
+        TableNameValue("Architecture", "%s", PlatformGetDeviceArch() );
         
+        TableNameValue("IMGUI Version", "%s", IMGUI_VERSION );
+        
+        ImGui::Separator();
+        
+        TableNameValue("Elapsed Time", "%.2fs",  m_time );
+        
+        TableNameValue("Presets Loaded", "%d", (int)m_presetHistory.size() );
+        TableNameValue("Presets Total", "%d", (int)m_presetList.size() );
         PlatformMemoryStats memstats;
         
         if (PlatformGetMemoryStats(memstats)) {
+            
             ImGui::Separator();
-            ImGui::TextColumn("Virtual Mem\t%.2fMB\t", (memstats.virtual_size_mb));
-            ImGui::TextColumn("Resident Mem\t%.2fMB\t", (memstats.resident_size_mb));
-            ImGui::TextColumn("Resident Max\t%.2fMB\t", (memstats.resident_size_max_mb));
+            
+            //            TableSeparator();
+            TableNameValue("Virtual Mem", "%.2fMB", (memstats.virtual_size_mb));
+            TableNameValue("Resident Mem", "%.2fMB", (memstats.resident_size_mb));
+            TableNameValue("Resident Max", "%.2fMB", (memstats.resident_size_max_mb));
         }
-
         
         ImGui::Separator();
+
+        TableNameValue("Frame Rate", "%3.2f", 1000.0f / m_frameTime );
+        TableNameValue("FrameTime", "%3.2fms", m_frameTime );
+        TableNameValue("RenderTime", "%3.2fms", m_renderTime );
         
+        
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::Text("");
+        ImGui::TableNextColumn();
+        
+        {
+            
+            
+//                    IMGUI_API void          PlotHistogram(const char* label, const float* values, int values_count, int values_offset = 0, const char* overlay_text = NULL, float scale_min = FLT_MAX, float scale_max = FLT_MAX, ImVec2 graph_size = ImVec2(0, 0), int stride = sizeof(float));
+
+          ImGui::PlotHistogram("",
+                               m_frameTimeHistory.data(),
+                               (int)m_frameTimeHistory.size(),
+                                0, // values offset
+                               "", // overlay text
+                               0.0f, 64.0f, // scale_min scale_msx
+                               ImVec2(512,80)
+                               );
+        }
+        ImGui::TableNextColumn();
+
+        
+        
+        ImGui::EndTable();
+    }
+    
+}
+
+void VizController::DrawPanel_Video()
+{
+    int table_flags =
+    ImGuiTableFlags_BordersInnerV|
+    ImGuiTableFlags_ColumnsWidthFixed
+    ;
+    if (ImGui::BeginTable("##video_table", 2, table_flags))
+    {
+//                ImGui::TableSetColumnWidth(0, 240 );
+//                ImGui::TableSetColumnWidth(1, 800 );
+
+//            ImGui::TableNextRow();
+//                ImGui::TableNextColumn();
+    
+        
+        TableNameValue("Video Driver", "%s", m_context->GetDriver().c_str() );
+        TableNameValue("Video Device", "%s", m_context->GetDesc().c_str() );
+
+        auto internal_texture = m_vizualizer->GetInternalTexture();
+        TableNameValue("Internal Texture", "%dx%dx%s", internal_texture->GetWidth(), internal_texture->GetHeight(), PixelFormatToString(internal_texture->GetFormat()) );
+
         auto texture = m_vizualizer->GetOutputTexture();
-        
-        ImGui::TextColumn("Video Driver\t%s\t", m_context->GetDriver().c_str() );
-        ImGui::TextColumn("Video Device\t%s\t", m_context->GetDesc().c_str() );
-        ImGui::TextColumn("Output Texture\t%dx%dx%s\t", texture->GetWidth(), texture->GetHeight(), PixelFormatToString(texture->GetFormat()) );
-        
+        TableNameValue("Output Texture", "%dx%dx%s", texture->GetWidth(), texture->GetHeight(), PixelFormatToString(texture->GetFormat()) );
+
+
+        ImGui::Separator();
+
         int screenId = 0;
         for (auto info : m_screens)
         {
-            ImGui::TextColumn("Screen[%d]\t%dx%dx%s rate:%.f scale:%.f edr:%.2f %s\t",
-                              screenId,
-                              info.size.width,
-                              info.size.height,
-                              PixelFormatToString(info.format),
-                              info.refreshRate,
-                              info.scale,
-                              info.maxEDR,
-                              info.colorSpace.c_str()
-                              );
+            
+
+            ImGui::TableNextRow();
+            
+            TableNameValue("Screen", "#%d", screenId);
+            TableNameValue("Size", "%dx%d", info.size.width,
+                           info.size.height
+                           );
+            TableNameValue("Format", "%s", PixelFormatToString(info.format));
+            TableNameValue("RefreshRate", "%.fhz", info.refreshRate);
+            TableNameValue("Scale", "%.1f", info.scale);
+            TableNameValue("HDR Enabled", "%s", info.hdr ? "true" : "false");
+            TableNameValue("MaxEDR", "%.2f", info.maxEDR);
+            TableNameValue("ColorSpace", "%s", info.colorSpace.c_str());
+
+            ImGui::Separator();
 
             screenId++;
         }
-        ImGui::Separator();
-        
-
-#if 0
-        ImGui::TextColumn("Load Count\t%d\t", m_presetLoadCount );
-        ImGui::TextColumn("Count<Shader>\t%d\t",  (int)InstanceCounter<Shader>::GetInstanceCount() );
-        ImGui::TextColumn("Count<Preset>\t%d\t",  (int)InstanceCounter<CState>::GetInstanceCount() );
-        ImGui::TextColumn("Count<Expr>\t%d\t", Script::mdpx::GetExpressionCount() );
-        ImGui::Separator();
-#endif
-        
-        
-        
-        
-//                ImGui::Separator();
 
 
-
-        ImGui::TextColumn("Audio Source:\n");
         
-        ImGui::NextColumn();
-        for (size_t i=0; i < m_audioSourceList.size(); i++) {
+        ImGui::EndTable();
+    }
 
-            auto source = m_audioSourceList[i];
-            
+}
+
+void VizController::DrawPanel_History()
+{
+    ImGuiTableFlags flags =
+    ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV
+    | ImGuiTableFlags_RowBg
+    | ImGuiTableFlags_ScrollY
+    //        | ImGuiTableFlags_ColumnsWidthFixed
+    ; // | ImGuiTableFlags_ContextMenuInBody;
+    
+    //    ImVec2 sz = ImGui::GetContentRegionAvail();
+    if (ImGui::BeginTable("##presets", 3, flags))
+    {
+        
+        ImGui::TableSetColumnWidth(0, 40 );
+        //                ImGui::TableSetColumnWidth(1, 800 );
+        
+        ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
+        ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_None);
+        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None);
+        ImGui::TableSetupColumn("Results", ImGuiTableColumnFlags_None);
+        ImGui::TableHeadersRow();
+        
+        const auto &list = m_presetHistory;
+        
+        
+        ImGuiListClipper clipper((int)list.size(),   ImGui::GetTextLineHeightWithSpacing() );
+        while (clipper.Step())
+        {
+            for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
+            {
+                const auto &entry = list[i];
+                bool is_selected = (m_presetHistoryPos == i);
+                
+                
+                ImGui::TableNextColumn();
+                ImGui::Text("%d",  entry.preset->Index );
+                
+                
+                ImGui::TableNextColumn();
+                if (ImGui::Selectable(entry.preset->Name.c_str(), is_selected, ImGuiSelectableFlags_SpanAllColumns))
+                {
+                    LoadPreset(entry.preset, false, false, true);
+                    m_presetHistoryPos = i;
+                    
+                }
+                
+                if (is_selected)
+                    ImGui::SetItemDefaultFocus();
+                
+                
+                ImGui::TableNextColumn();
+                
+                if (is_selected)
+                {
+                    float progress = m_vizualizer->GetPresetProgress();
+                    
+                    ImGui::ProgressBar(progress, ImVec2(128.0f, ImGui::GetTextLineHeight() ));
+                    
+                    ImGui::SameLine();
+                    //                    ImGui::Text(" *** active *** (%3.1f%%)",
+                    //                                progress * 100.0f
+                    //                                );
+                    
+                } else
+                    
+                    if (entry.preset->TestResult)
+                    {
+                        auto profile = entry.preset->TestResult;
+                        
+                        ImGui::Text("frametime:%3.2f fast:%d slow:%d (%.2f%%)",
+                                    profile->AveFrameTime,
+                                    profile->FastFrameCount,
+                                    profile->SlowFrameCount,
+                                    profile->SlowPercentage
+                                    );
+                    }
+                
+            }
+        }
+        
+        ImGui::EndTable();
+    }
+    
+}
+
+void VizController::DrawPanel_Presets()
+{
+    
+    //            ImGui::BeginChild("left pane", ImVec2(400, 0), true);
+    //
+    //            static PresetGroupPtr selectedGroup;
+    //            for (auto group : m_presetGroups)
+    //            {
+    //                if (!group->Presets.empty())
+    //                {
+    //                    bool enabled = true;
+    //                    ImGui::Checkbox("", &enabled);
+    //                    ImGui::SameLine();
+    //                    if (ImGui::Selectable(group->Name.c_str(), group == selectedGroup))
+    //                        selectedGroup = group;
+    //                }
+    //            }
+    //            ImGui::EndChild();
+    //
+    //            ImGui::SameLine();
+    
+    ImGui::BeginGroup();
+    
+    /*
+     ImGui::BeginChild("right pane", ImVec2(0, 0));
+     
+     
+     if (selectedGroup)
+     {
+     static PresetInfoPtr selectedPreset;
+     for(auto info : selectedGroup->Presets)
+     {
+     if (ImGui::Selectable(info->ShortName.c_str(), info == selectedPreset ))
+     {
+     SelectPreset(info, false);
+     selectedPreset = info;
+     }
+     
+     }
+     }
+     ImGui::EndChild();
+     */
+    
+    //            auto selected = m_currentPreset;
+    //            show_preset_table(m_presetList, selected);
+    //            if (selected != m_currentPreset)
+    //            {
+    //                SelectPreset(selected, false);
+    //            }
+    
+    DrawPresetSelector();
+    
+    ImGui::EndGroup();
+    
+
+}
+
+void VizController::DrawPanel_Audio()
+{
+    int table_flags =
+    ImGuiTableFlags_BordersInnerV|
+    ImGuiTableFlags_ColumnsWidthFixed
+    ;
+    
+    if (ImGui::BeginTable("##audio_table", 2, table_flags))
+    {
+//                ImGui::TableSetColumnWidth(0, 240 );
+//                ImGui::TableSetColumnWidth(1, 800 );
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+
+        ImGui::Text("Audio Source");
+        ImGui::TableNextColumn();
+        
+        IAudioSourcePtr sources[] = {m_audio_null,m_audio_wavfile, m_audio_microphone, nullptr};
+
+        for (int i=0; sources[i]; i++)
+        {
+            auto source = sources[i];
             bool selected = (source == m_audioSource);
             if (ImGui::RadioButton( source->GetDescription().c_str(), selected ))
             {
                 m_audioSource = source;
             }
         }
-        
 
         
-        ImGui::Columns(1);
+        ImGui::TableNextColumn();
+
+        ImGui::Separator();
+
+        ImGui::Text("Gain");
+        ImGui::TableNextColumn();
+        ImGui::SliderFloat("", &m_audioGain, 0.0f, 8.0f);
+        ImGui::TableNextColumn();
 
         
-//        ImGui::Separator();
+        ImGui::Separator();
 
+        TableNameValue("Description", "%s", m_audioSource->GetDescription().c_str());
+        TableNameValue("SampleRate", "%.fhz", m_audio->GetSampleRate());
+        TableNameValue("BlockSize", "%d samples\n",  m_audio->GetBlockSize() );
 
         
-     
+        const char *channels[] = {"Left", "Right", nullptr};
+        for (int i=0; channels[i]; i++)
+        {
+            
+            ImGui::Separator();
+            
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("%s", channels[i]);
+            ImGui::TableNextColumn();
+            m_audio->DrawChannelUI(i);
+            ImGui::TableNextColumn();
+        }
         
+        ImGui::Separator();
+        
+        ImGui::EndTable();
     }
-    ImGui::End();
     
-    if (show_demo_window)
+
+}
+
+void VizController::DrawPanel_Log()
+{
+    LogDrawPanel();
+}
+
+
+void VizController::DrawSettingsTabs()
+{
+
+
+    if (ImGui::BeginTabBar("##Tabs", ImGuiTabBarFlags_None))
     {
-        ImGui::ShowDemoWindow(&show_demo_window);
+        if (ImGui::BeginTabItem("About"))
+        {
+            DrawPanel_About();
+            ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("History"))
+        {
+            DrawPanel_History();
+            ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("Presets"))
+        {
+            DrawPanel_Presets();
+            ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("Video"))
+        {
+            DrawPanel_Video();
+            ImGui::EndTabItem();
+        }
+        
+        if (ImGui::BeginTabItem("Audio"))
+        {
+            DrawPanel_Audio();
+            ImGui::EndTabItem();
+        }
+        
+        if (ImGui::BeginTabItem("Log"))
+        {
+            DrawPanel_Log();
+            ImGui::EndTabItem();
+        }
+        
+        if (ImGui::BeginTabItem("Textures"))
+        {
+            if (m_texture_map)
+                m_texture_map->ShowUI();
+            ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("Profiler"))
+        {
+            TProfiler::OnGUIPanel();
+            ImGui::EndTabItem();
+        }
+        
+        
+        
+
+        
+        ImGui::EndTabBar();
     }
+
 }
 
 
@@ -1464,142 +2167,9 @@ void VizController::CaptureScreenshot(std::string path)
     
 }
 
-
-void VizController::DrawPresetPlaylist()
-{
-    if (m_showPlayList)
-    {
-
-//        ImGui::SetNextWindowCollapsed(true, ImGuiCond_Once);
-        
-//        ImGui::SetNextWindowContentSize (ImVec2(600, 800), Imguicond_ );
-        ImGui::SetNextWindowSize(ImVec2(520,600), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("Preset Playlist", &m_showPlayList, 0
-                         ))
-        {
-            std::string buffer;
-            buffer.reserve(512);
-            
-            ImGui::Columns(3, "presets", true);
-//            ImGui::SetColumnOffset(0, 0);
-//            ImGui::SetColumnOffset(1, 40);
-//            ImGui::SetColumnOffset(2, 350);
-
-            ImGuiListClipper clipper((int)m_playlist.size(),   ImGui::GetTextLineHeightWithSpacing() );
-            while (clipper.Step())
-            {
-                for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
-                {
-                    auto preset = m_playlist[i];
-                    bool is_selected = m_playlistPos == i;
-                    
-                    
-                    ImGui::Text("%d.", i + 1);
-                    ImGui::NextColumn();
-
-
-                    if (ImGui::Selectable(preset->Name.c_str(), is_selected, ImGuiSelectableFlags_SpanAllColumns))
-                    {
-                        SelectPlaylistPreset(i, false);
-                    }
-                    
-                    if (is_selected)
-                        ImGui::SetItemDefaultFocus();
-                    ImGui::NextColumn();
-
-
-                    if (preset->TestResult)
-                    {
-                        auto profile = preset->TestResult;
-
-                        ImGui::Text("ave:%3.2f fast:%d slow:%d (%.2f%%)",
-                                    profile->AveFrameTime,
-                                    profile->FastFrameCount,
-                                    profile->SlowFrameCount,
-                                    profile->SlowPercentage
-                                    );
-                    }
-                    ImGui::NextColumn();
-
-                    
-                }
-            }
-            
-            ImGui::Columns(1);
-
-        }
-        ImGui::End();
-    }
-}
     
 
-
-void VizController::DrawPresetSelector()
-{
-    if (m_showPresetSelector)
-    {
-
-        ImGui::SetNextWindowSize(ImVec2(520,600), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("Preset Selector", &m_showPresetSelector))
-        {
-            std::string buffer;
-            buffer.reserve(512);
-            
-            ImGui::Columns(2, "presets", true);
-//            ImGui::Columns(3, "presets", true);
-//            ImGui::SetColumnOffset(0, 0);
-            ImGui::SetColumnOffset(1, 40);
-//            ImGui::SetColumnOffset(2, 350);
-
-            ImGuiListClipper clipper((int)m_presetList.size(),   ImGui::GetTextLineHeightWithSpacing() );
-            while (clipper.Step())
-            {
-                for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
-                {
-                    auto preset = m_presetList[i];
-                    bool is_selected = (preset == m_currentPreset);
-                    
-                    
-                    ImGui::Text("[%d]", i);
-                    ImGui::NextColumn();
-
-
-                    if (ImGui::Selectable(preset->Name.c_str(), is_selected, ImGuiSelectableFlags_SpanAllColumns))
-                    {
-                        SelectPreset(preset, false);
-                    }
-                    
-                    if (is_selected)
-                        ImGui::SetItemDefaultFocus();
-                    ImGui::NextColumn();
-
-
-                    /*
-                    if (preset->TestResult)
-                    {
-                        auto profile = preset->TestResult;
-
-                        ImGui::Text("ave:%3.2f fast:%d slow:%d (%.2f%%)",
-                                    profile->AveFrameTime,
-                                    profile->FastFrameCount,
-                                    profile->SlowFrameCount,
-                                    profile->SlowPercentage
-                                    );
-                    } 
-                    ImGui::NextColumn();
-*/
-                    
-                }
-            }
-            
-            ImGui::Columns(1);
-
-        }
-        ImGui::End();
-    }
-}
     
-void LogDrawWindow(bool *popen);
 extern void DebugGUIInputDevice();
 
 void VizController::DrawDebugUI()
@@ -1607,69 +2177,81 @@ void VizController::DrawDebugUI()
     
     PROFILE_FUNCTION_CAT("ui");
     
-//
-//    if (ImGui::IsKeyPressed('p'))
-//    {
-//        m_paused = !m_paused;
-//    }
-//
-//    if (ImGui::IsKeyPressed('f'))
-//    {
-//        SingleStep();
-//    }
-//
-//    if (ImGui::IsKeyPressed('d'))
-//    {
-//        ToggleDebugMenu();
-//    }
-    
-    if (ImGui::IsKeyPressed( KEYCODE_ESCAPE))
+    if (!ImGui::IsAnyItemActive())
     {
-        m_showDebug = false;
-        m_showControls = false;
+        if (ImGui::IsKeyPressed( KEYCODE_L))
+        {
+            SetSelectionLock(!m_selectionLocked);
+        }
+        
+        
+        if (ImGui::IsKeyPressed( KEYCODE_P))
+        {
+            TogglePause();
+        }
+        
+        if (ImGui::IsKeyPressed( KEYCODE_LEFT, false))
+        {
+            NavigatePrevious();
+        }
+        
+        if (ImGui::IsKeyPressed( KEYCODE_RIGHT, false))
+        {
+            NavigateNext();
+        }
+        
+        if (ImGui::IsKeyPressed( KEYCODE_SPACE, false))
+        {
+            NavigateRandom();
+        }
+
+        
+        if (ImGui::IsKeyPressed( KEYCODE_ESCAPE))
+        {
+            ToggleControlsMenu();
+        }
     }
 
-    if (ImGui::IsAnyMouseDown())
+    if (ImGui::IsMouseClicked(0))
     {
-//        m_showDebug = true;
-        m_showControls = true;
+//        m_showSettings = true;
+        if (!m_showUI)
+        {
+            m_showUI = true;
+        }
+        else if (!ImGui::GetIO().WantCaptureMouse ) //if (!ImGui::IsAnyItemActive() && !ImGui::IsAnyItemHovered())
+        {
+            m_showUI = false;
+        }
     }
+    
 
     
-    if (m_showControls)
+    if (m_showUI)
     {
         DrawTitleWindow();
         DrawControlsWindow();
         
 
-        if (m_showDebug)
+        if (m_showSettings)
         {
-            DrawStatusWindow();
+            DrawSettingsWindow();
             if (m_vizualizer)
                 m_vizualizer->DrawDebugUI();
-            DrawPresetSelector();
-            DrawPresetPlaylist();
-            
-            if (m_showLogWindow)
-                LogDrawWindow(&m_showLogWindow);
-            
-            
-            if (m_showAudioWindow)
-                m_audio->DebugDrawUI(&m_showAudioWindow);
-            
-
-
         }
 
         if (m_showProfiler)
             TProfiler::OnGUI(&m_showProfiler);
 
-        // invoke all custom debug menus
-        for (auto func : m_customDebugMenus)
+        
+        
+        if (m_showDemoWindow)
         {
-            func();
+            ImGui::ShowDemoWindow(&m_showDemoWindow);
         }
     }
+    
+    
     
     
 }
@@ -1814,21 +2396,21 @@ void VizController::RenderFrame(float dt)
 {
     PROFILE_FUNCTION();
 
-    
-    // stop audio sources
-    for (size_t i=0; i < m_audioSourceList.size(); i++)
-    {
-       auto source = m_audioSourceList[i];
-       if (source != m_audioSource)
-       {
-           source->StopCapture();
-       }
+    if (m_audio_microphone && m_audioSource != m_audio_microphone) {
+        m_audio_microphone->StopCapture();
     }
     
-    m_audio->Update(m_audioSource, dt);
+    if (!m_audioSource) {
+        m_audioSource = m_audio_null;
+    }
     
+    m_audio->Update(m_audioSource, dt, m_audioGain);
+    
+    float scale = 1.0f;
     // see if output texture needs resiing
     Size2D size = m_context->GetDisplaySize();
+    size.width  *= scale;
+    size.height *= scale;
     m_vizualizer->CheckResize(size);
     
     m_vizualizer->Render(dt);
@@ -1837,20 +2419,21 @@ void VizController::RenderFrame(float dt)
     m_frame++;
     
 
-    if (m_vizualizer->GetPresetProgress() >= 1.0f)
+    float progress = m_vizualizer->GetPresetProgress();
+    if (m_lastProgress < 1.0f &&  progress >= 1.0f)
     {
-        if (!m_vizualizer->IsLoadingPreset())
+        // prset is complete
+        /*
+        if (IsTesting())
         {
-            if (IsTesting())
-            {
-                SelectNextPreset(false);
-            }
-            else if (!m_selectionLocked)
-            {
-                NavigateForward();
-            }
+            SelectNextPreset(false);
+        }
+        else */ if (!m_selectionLocked)
+        {
+            NavigateNext();
         }
     }
+    m_lastProgress = progress;
 
 }
 
@@ -1859,7 +2442,7 @@ void VizController::CaptureAllScreenshots(bool overwriteExisting)
 {
 
     m_playlist.clear();
-    m_playlistPos = 0;
+//    m_playlistPos = 0;
     
     for (auto preset : m_presetList)
     {
@@ -1886,7 +2469,7 @@ void VizController::CaptureAllScreenshots(bool overwriteExisting)
 
 
         LogPrint("CaptureAllScreenshots started (count=%d)\n", (int)m_playlist.size());
-        SelectNextPreset(false);
+//        SelectNextPreset(false);
     }
 }
 
@@ -1895,14 +2478,15 @@ void VizController::RenderToScreenshot(PresetInfoPtr info, Size2D size, int fram
     uint32_t seed = 0x12345678;
     float duration = frameCount * m_deltaTime;
     
+    PresetLoadArgs args = {0.0f, duration, false};
     
-    m_audioSource =  GetAudioSource(1);
+    m_audioSource =  m_audio_wavfile;
     m_audioSource->Reset();
     m_audio->Reset();
 
     m_vizualizer->SetOutputSize(size);
     m_vizualizer->SetRandomSeed(seed);
-    if (!m_vizualizer->LoadPreset(info->Path.c_str(), 0.0f, duration))
+    if (!LoadPreset(info, args))
     {
         // error
         LogError("RenderToScreenshotError: '%s'\n", info->Name.c_str());
@@ -1914,7 +2498,7 @@ void VizController::RenderToScreenshot(PresetInfoPtr info, Size2D size, int fram
     
     for (int i=0; i < frameCount; i++)
     {
-        m_audio->Update(m_audioSource, m_deltaTime);
+        m_audio->Update(m_audioSource, m_deltaTime, m_audioGain);
         m_vizualizer->Render(m_deltaTime);
         m_context->Flush();
     }
@@ -1931,28 +2515,31 @@ void VizController::RenderToScreenshot(PresetInfoPtr info, Size2D size, int fram
 }
 
 
-ImageDataPtr VizController::RenderToImageBuffer(std::string presetPath, Size2D size, int frameCount)
+ImageDataPtr VizController::RenderToImageBuffer(PresetInfoPtr info, Size2D size, int frameCount)
 {
     uint32_t seed = 0x12345678;
     float duration = frameCount * m_deltaTime;
 
     
-    m_audioSource =  GetAudioSource(1);
+    
+    PresetLoadArgs args = {0.0f, duration, false};
+    
+    m_audioSource =  m_audio_wavfile;
     m_audioSource->Reset();
     m_audio->Reset();
 
     m_vizualizer->SetOutputSize(size);
     m_vizualizer->SetRandomSeed(seed);
-    if (!m_vizualizer->LoadPreset(presetPath.c_str(), 0.0f, duration))
+    if (!LoadPreset(info, args))
     {
-        LogError("ERROR: Could not load preset: %s\n", presetPath.c_str());
+        LogError("ERROR: Could not load preset: %s\n", info->Path.c_str());
         return nullptr;
     }
     
     for (int i=0; i < frameCount; i++)
     {
 //        printf("frame[%d]\n", i);
-        m_audio->Update(m_audioSource, m_deltaTime);
+        m_audio->Update(m_audioSource, m_deltaTime, m_audioGain);
         m_vizualizer->Render(m_deltaTime);
         m_context->Flush();
     }
@@ -1963,7 +2550,6 @@ ImageDataPtr VizController::RenderToImageBuffer(std::string presetPath, Size2D s
 
 void VizController::CheckDeterminism(PresetInfoPtr preset)
 {
-    UsePrecompiledKernels = false;
     int frameCount = 2;
     
     Size2D size(1024, 1024);
@@ -1973,7 +2559,7 @@ void VizController::CheckDeterminism(PresetInfoPtr preset)
     ImageDataPtr imageData[2];
     for (int i=0; i < 2; i++)
     {
-        imageData[i] = RenderToImageBuffer(preset->Path, size, frameCount);
+        imageData[i] = RenderToImageBuffer(preset, size, frameCount);
 //         m_vizualizer->DumpState();
     }
     
@@ -1987,7 +2573,7 @@ void VizController::CheckDeterminism(PresetInfoPtr preset)
         LogPrint("Determinism error: %s\n", preset->Name.c_str());
         
         std::string subdir = "";
-        subdir += PlatformGetName();
+        subdir += PlatformGetPlatformName();
         subdir += "-";
         subdir += "errors";
         subdir += "-";
@@ -2006,32 +2592,27 @@ void VizController::CheckDeterminism(PresetInfoPtr preset)
         }
         
         
-//        for (int i=0; i < 2; i++)
-//        {
-//            RenderToImageBuffer(preset->Path, size, 60, imageData[i]);
-//            m_vizualizer->DumpState();
-//        }
         
     }
 }
 
 void VizController::RenderNextScreenshot()
 {
-    if (m_playlistPos < m_playlist.size())
-    {
-        PresetInfoPtr info = m_playlist[m_playlistPos];
-        RenderToScreenshot(info, Size2D(1024, 1024), 60);
-        m_playlistPos++;
-    }
-    else
-    {
-        LogPrint("Done with screenshot capture (%d captured)\n", (int)m_playlist.size());
-        m_fTimeBetweenPresets = 15.0f;        // <- this is in addition to m_fBlendTimeAuto
-
-        m_captureScreenshotsFast = false;
-        // we should quit now
-        m_shouldQuit = true;
-    }
+//    if (m_playlistPos < m_playlist.size())
+//    {
+//        PresetInfoPtr info = m_playlist[m_playlistPos];
+//        RenderToScreenshot(info, Size2D(1024, 1024), 60);
+//        m_playlistPos++;
+//    }
+//    else
+//    {
+//        LogPrint("Done with screenshot capture (%d captured)\n", (int)m_playlist.size());
+//        m_fTimeBetweenPresets = 15.0f;        // <- this is in addition to m_fBlendTimeAuto
+//
+//        m_captureScreenshotsFast = false;
+//        // we should quit now
+//        m_shouldQuit = true;
+//    }
 
 }
 
@@ -2054,6 +2635,12 @@ void VizController::Render(int screenId, int screenCount, float dt)
         m_frameTimer.Restart();
         
         m_frameTimes.push_back(m_frameTime);
+        
+        if (m_frameTimeHistory.empty())
+            m_frameTimeHistory.resize(256);
+        
+        m_frameTimeHistory.push_back(m_frameTime);
+        m_frameTimeHistory.erase(m_frameTimeHistory.begin());
     }
     
 
@@ -2118,25 +2705,50 @@ void VizController::Render(int screenId, int screenCount, float dt)
 
 }
 
-void  VizController::ToggleDebugMenu()
+void  VizController::ToggleSettingsMenu()
 {
-    m_showDebug = !m_showDebug;
+    m_showSettings = !m_showSettings;
     
 }
 
 void  VizController::ToggleControlsMenu()
 {
-    m_showControls = !m_showControls;
+    m_showUI = !m_showUI;
     
 }
 
 
+void VizController::LoadSettings()
+{
+    
+}
 
-IAudioSourcePtr OpenNullAudioSource();
-IAudioSourcePtr OpenALAudioSource();
-IAudioSourcePtr OpenSLESAudioSource();
-IAudioSourcePtr OpenUDPAudioSource();
-IAudioSourcePtr OpenAVAudioEngineSource();
+
+void VizController::SaveSettings()
+{
+#if 0
+    JsonStringWriter writer;
+    writer.StartObject();
+    
+    writer.WriteArray("history");
+    for (const auto &entry : m_presetHistory)
+    {
+        writer.Write( entry.preset->Name );
+
+    }
+    writer.EndArray();
+    
+    writer.EndObject();
+    
+    
+    if (FileWriteAllText( m_settingsPath, writer.ToCString() )) {
+        LogPrint("Settings saved to '%s'\n", m_settingsPath.c_str());
+    }
+    
+#endif
+    
+}
+
 
 
 VizControllerPtr CreateVizController(ContextPtr context, std::string assetDir, std::string userDir)
@@ -2156,26 +2768,24 @@ VizControllerPtr CreateVizController(ContextPtr context, std::string assetDir, s
 
     auto vizController = std::make_shared<VizController>(context, assetDir, userDir);
     vizController->AddPresetsFromDir("presets", true);
-    //    vizController->OpenInputAudioFile("audio.raw");
+    //    vizController->OpenInputAudioFile("audio/audio.raw");
     
     
-    vizController->AddAudioSource(OpenNullAudioSource());
-    vizController->OpenInputAudioFile("audio.wav");
-    vizController->SelectAudioSource( vizController->GetAudioSource(1) );
-
+    vizController->OpenInputAudioFile("audio/audio.wav");
+   
 #if !defined(WIN32) && !TARGET_OS_TV && !EMSCRIPTEN && !defined(__ANDROID__)
-    vizController->AddAudioSource(OpenALAudioSource());
+    vizController->SetMicrophoneAudioSource(OpenALAudioSource());
 #endif
 
 #if defined(__ANDROID__) || defined(OCULUS)
-    vizController->AddAudioSource(OpenSLESAudioSource());
+    vizController->SetMicrophoneAudioSource(OpenSLESAudioSource());
 //    vizController->SelectAudioSource( vizController->GetAudioSource(2) );
 #endif
 
-#if defined(__APPLE__)
-    vizController->AddAudioSource(OpenAVAudioEngineSource());
-//    vizController->SelectAudioSource( vizController->GetAudioSource(3) );
-#endif
+//#if defined(__APPLE__)
+//    vizController->SetMicrophoneAudioSource(OpenAVAudioEngineSource());
+////    vizController->SelectAudioSource( vizController->GetAudioSource(3) );
+//#endif
 
 
 
@@ -2206,7 +2816,7 @@ VizControllerPtr CreateVizController(ContextPtr context, std::string assetDir, s
     else
     {
         vizController->SetSelectionLock(false);
-        vizController->SelectRandomPreset();
+        vizController->NavigateRandom();
     }
     
     if (Config::GetBool("TESTMODE", false))
@@ -2217,7 +2827,7 @@ VizControllerPtr CreateVizController(ContextPtr context, std::string assetDir, s
     if (PlatformIsDebug())
     {
       vizController->ToggleControlsMenu();
-      vizController->ToggleDebugMenu();
+      vizController->ToggleSettingsMenu();
     }
 
     if (Config::GetBool("CAPTURE_ALL", false))
@@ -2258,27 +2868,11 @@ VizControllerPtr CreateVizController(ContextPtr context, std::string assetDir, s
    // vizController->SetAudioSource(OpenALAudioSource());
     //  vizController->SetAudioSource(OpenUDPAudioSource());
     
+    vizController->LoadSettings();
+    
     return vizController;
 }
 
 
 
-
-void VizController::GeneratePresetCPPCode()
-{
-    std::string dir = PathCombine(PathGetDirectory(__FILE__), "../generated/");
-    std::string outputPath = PathCombine(dir, "generated-code.cpp");
-
-    
-    Script::mdpx::KernelCodeGenerator cg;
-    
-    for (auto pi : m_presetList)
-    {
-        m_vizualizer->LoadPresetKernelsFromFile(pi->Path, cg);
-    }
-    
-    cg.GenerateCode(outputPath);
-    LogPrint("Generated preset cpp code: %s\n", outputPath.c_str());
-}
-                                       
 

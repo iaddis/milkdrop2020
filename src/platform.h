@@ -93,6 +93,8 @@ void StringFormat(std::string *pstr, const char *format, ...);
 void LogPrintV(const char *format, va_list arglist) PLATFORM_FMTLIST(1);
 void LogPrint(const char *format, ...) PLATFORM_FMTARGS(1);
 void LogError(const char *format, ...) PLATFORM_FMTARGS(1);
+void LogDrawWindow(bool *popen);
+void LogDrawPanel();
 
 void DirectoryGetFiles(std::string dir, std::vector<std::string> &files, bool recurse = false);
 bool DirectoryCreate(std::string dir);
@@ -106,12 +108,14 @@ bool FileWriteAllBytes(std::string path, std::vector<uint8_t> &data);
 bool FileReadAllBytes(std::string path, std::vector<uint8_t> &data);
 
 
+
+const char *PlatformGetPlatformName();
 const char *PlatformGetAppName();
-const char *PlatformGetName();
+const char *PlatformGetAppVersion();
 const char *PlatformGetDeviceModel();
+const char *PlatformGetDeviceArch();
 const char *PlatformGetBuildConfig();
 bool        PlatformIsDebug();
-const char *PlatformGetVersion();
 
 
 

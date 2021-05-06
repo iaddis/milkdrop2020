@@ -293,18 +293,23 @@ public:
             _lineOffsets.push_back( _log.size() );
     }
     
-    
-    
+
     void    Draw(const char* title, bool* p_open)
     {
-//        ImGui::SetNex
         ImGui::SetNextWindowSize(ImVec2(1100, 400), ImGuiCond_Once);
 
-        if (!ImGui::Begin(title, p_open))
+        if (ImGui::Begin(title, p_open))
         {
-            ImGui::End();
-            return;
+            DrawPanel();
         }
+        ImGui::End();
+    }
+
+    
+    void    DrawPanel()
+    {
+        std::lock_guard<std::mutex> _lock(_mutex);
+
 
         // Options menu
         if (ImGui::BeginPopup("Options"))
@@ -324,7 +329,8 @@ public:
         _Filter.Draw("Filter", -100.0f);
 
         ImGui::Separator();
-        ImGui::BeginChild("scrolling", ImVec2(0,0), false, ImGuiWindowFlags_HorizontalScrollbar);
+        ImGui::BeginChild("scrolling", ImVec2(0,0), false, ImGuiWindowFlags_HorizontalScrollbar |
+                          ImGuiWindowFlags_AlwaysVerticalScrollbar);
 
         if (clear)
             Clear();
@@ -338,7 +344,6 @@ public:
             // This is because we don't have a random access on the result on our filter.
             // A real application processing logs with ten of thousands of entries may want to store the result of search/filter.
             // especially if the filtering function is not trivial (e.g. reg-exp).
-            std::lock_guard<std::mutex> _lock(_mutex);
 
             int lineCount = (int)_lineOffsets.size() - 1;
             const char* buf = _log.data();
@@ -364,8 +369,6 @@ public:
             // When using the filter (in the block of code above) we don't have random access into the data to display anymore, which is why we don't use the clipper.
             // Storing or skimming through the search result would make it possible (and would be recommended if you want to search through tens of thousands of entries)
             
-            std::lock_guard<std::mutex> _lock(_mutex);
-
             ImGuiListClipper clipper;
             
             const char* buf = _log.data();
@@ -389,7 +392,6 @@ public:
             ImGui::SetScrollHereY(1.0f);
 
         ImGui::EndChild();
-        ImGui::End();
     }
 
     
@@ -405,6 +407,11 @@ void LogDrawWindow(bool *popen)
     {
         s_logBuffer.Draw("Log", popen);
     }
+}
+
+void LogDrawPanel()
+{
+    s_logBuffer.DrawPanel();
 }
 
 
@@ -543,12 +550,18 @@ void DirectoryGetFiles(std::string dir, std::vector<std::string> &files, bool re
     dir = PathRemoveLeadingSlash(dir);
 
     AAssetDir * adir = AAssetManager_openDir(g_assetManager, dir.c_str());
+    if (!adir)
+        return;
 
     const char *name;
     while ((name = AAssetDir_getNextFileName(adir)))
     {
         std::string assetName = PathCombine(dir, name);
         files.push_back(assetName);
+        
+        if (recurse) {
+            DirectoryGetFiles(assetName, files, recurse);
+        }
     }
     AAssetDir_close(adir);
 #else
@@ -562,7 +575,7 @@ const char *PlatformGetAppName()
     return "MilkDropPortable";
 }
 
-const char *PlatformGetName()
+const char *PlatformGetPlatformName()
 {
 #if defined(OCULUS)
     const char *platform = "oculus";
@@ -630,9 +643,9 @@ std::string PlatformGetTimeString()
     return std::string(timestr);
 }
 
-const char *PlatformGetVersion()
+const char *PlatformGetAppVersion()
 {
-    return "1.0.0";
+    return "1.1.0";
 }
 
 
@@ -666,27 +679,51 @@ bool PlatformGetMemoryStats(PlatformMemoryStats &stats)
 }
 #endif
 
+#if __APPLE__
+
+static const char *GetSysCtlString(const char *key)
+{
+    size_t size = 0;
+    ::sysctlbyname(key, NULL, &size, NULL, 0);
+    
+    char *str = new char[size + 1];
+    ::sysctlbyname(key, str, &size, NULL, 0);
+    str[size] = 0;
+    return str;
+}
+#endif
 
 const char *PlatformGetDeviceModel()
 {
 #if __APPLE__
 
     static const char *_model;
-    
     if (!_model)
     {
-        size_t size;
-        ::sysctlbyname("hw.machine", NULL, &size, NULL, 0);
-        
-        char *str = new char[size + 1];
-        ::sysctlbyname("hw.machine", str, &size, NULL, 0);
-        str[size] = 0;
-        
-//        const char *sim_model = getenv("SIMULATOR_MODEL_IDENTIFIER");
-        
-        _model = str;
+        _model = GetSysCtlString(
+                                 // "hw.machine"
+                                 "hw.model"
+                                 
+                                 );
     }
+    return _model;
     
+#else
+    return "<unknown>";
+#endif
+}
+
+const char *PlatformGetDeviceArch()
+{
+#if __APPLE__
+
+    static const char *_model;
+    if (!_model)
+    {
+        _model = GetSysCtlString(
+                                 "hw.machine"
+                                 );
+    }
     return _model;
     
 #else

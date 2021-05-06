@@ -229,7 +229,7 @@ static void    ImGui_ImplRender_Init(render::ContextPtr context, std::string ass
     
     ImGui_ImplRender_CreateFontsTexture(context);
     
-    std::string rootDir = PathCombine(assetDir, "data");;
+    std::string rootDir = PathCombine(assetDir, "shaders");;
     std::string shaderPath = PathCombine(rootDir, "imgui.fx");
     g_FixedShader = LoadShaderFromFile(context, rootDir, shaderPath);
         
@@ -401,8 +401,14 @@ static ImFont*  ImGuiSupport_AddFontFromFile(const std::string &path, float size
     void * font_data = ImGui::MemAlloc(data.size());
     memcpy(font_data, data.data(), data.size());
     
+    
+    std::string name = PathGetFileName(path);
+    
+    ImFontConfig cfg = *font_cfg;
+    strncpy(cfg.Name, name.c_str(), sizeof(cfg.Name));
+    
     ImGuiIO& io = ImGui::GetIO();
-    return io.Fonts->AddFontFromMemoryTTF(font_data, (int)data.size(), size_pixels, font_cfg, glyph_ranges);
+    return io.Fonts->AddFontFromMemoryTTF(font_data, (int)data.size(), size_pixels, &cfg, glyph_ranges);
 }
 
 void     ImGuiSupport_Init(render::ContextPtr context, std::string assetDir)
@@ -478,12 +484,12 @@ void     ImGuiSupport_Init(render::ContextPtr context, std::string assetDir)
         float fontSize;
         //
         
-//        fontName = "Roboto-Regular"; fontSize = 12;
+//        fontName = "Roboto-Regular.ttf"; fontSize = 12;
         
-    //        fontName = "ProggyTiny";  fontSize = 12;
-    //    fontName = "ProggyClean"; fontSize = 18;
-        fontName = "Cousine-Regular"; fontSize = 14;
-        std::string fontPath = PathCombine(PathCombine(assetDir, "fonts"), fontName) + ".ttf";
+    //        fontName = "ProggyTiny.ttf";  fontSize = 12;
+    //    fontName = "ProggyClean.ttf"; fontSize = 18;
+        fontName = "Cousine-Regular.ttf"; fontSize = 14;
+        std::string fontPath = PathCombine(PathCombine(assetDir, "fonts"), fontName);
         
         ImFontConfig font_config;
         font_config.PixelSnapH = false;
@@ -498,9 +504,10 @@ void     ImGuiSupport_Init(render::ContextPtr context, std::string assetDir)
 #endif
     
     {
-        std::string fontName = "FontAwesome";
-        float fontSize = 16.0f;
-        std::string fontPath = PathCombine(PathCombine(assetDir, "fonts"), fontName) + ".ttf";
+        std::string fontName = "FontAwesome.ttf";
+
+        float fontSize = 32.0f;
+        std::string fontPath = PathCombine(PathCombine(assetDir, "fonts"), fontName);
 
         ImFontConfig icons_config;
         icons_config.MergeMode = true;
@@ -545,34 +552,6 @@ void     ImGuiSupport_Shutdown()
 
 
 namespace ImGui {
-    void TextColumn(const char *format, ...)
-    {
-        char str[64 * 1024];
-        
-        va_list arglist;
-        va_start(arglist, format);
-        int count = vsnprintf(str, sizeof(str), format, arglist);
-        va_end(arglist);
-        (void)count;
-        str[sizeof(str) - 1] = '\0';
-        
-        
-        int start = 0;
-        int i;
-        for (i=0; str[i]; i++)
-        {
-            if (str[i] == '\t') {
-                ImGui::TextUnformatted( &str[start], &str[i] );
-                ImGui::NextColumn();
-                start = i + 1;
-            }
-            
-        }
-        
-        if (start < i)
-        ImGui::TextUnformatted( &str[start], &str[i] );
-    }
-    
 
 
     static  float _values_getter(void* data, int idx)

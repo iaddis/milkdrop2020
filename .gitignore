@@ -27,3 +27,4 @@ node_modules
 server/upload
 server/appdata
 build
+external/ovr_sdk_mobile_*

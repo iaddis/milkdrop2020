@@ -149,7 +149,7 @@ KeyCode ConvertKeyCode_OSX(int code)
         case    kVK_Space                   :
             return KEYCODE_SPACE;
         case    kVK_Delete                  :
-            return KEYCODE_DELETE;
+            return KEYCODE_BACKSPACE;
         case    kVK_Escape                  :
             return KEYCODE_ESCAPE;
         case    kVK_Command                 :

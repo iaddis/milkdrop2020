@@ -8,7 +8,7 @@
 // (Emscripten is a C++-to-javascript compiler, used to publish executables for the web. See https://emscripten.org/)
 
 #include "../external/imgui/imgui.h"
-#include "../external/imgui/imgui_impl_sdl.h"
+#include "../external/imgui/backends/imgui_impl_sdl.h"
 #include "imgui_support.h"
 #include <stdio.h>
 #include <assert.h>
@@ -42,34 +42,10 @@ static ContextPtr _context;
 static VizControllerPtr vizController;
 static IAudioSourcePtr m_audioSource;
 
-
-static bool LoadTextureFromFile(const char *path, render::gles::GLTextureInfo &ti)
-{
-    int width, height;
-    void *data = emscripten_get_preloaded_image_data(path, &width, &height);
-    if (!data)
-        return false;
-    
-    GLuint name;
-    glGenTextures(1, &name);
-    glActiveTexture(GL_TEXTURE8);
-    glBindTexture(GL_TEXTURE_2D, name);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glActiveTexture(GL_TEXTURE0);
-    
-    free(data);
-    
-    ti.name = name;
-    ti.width = width;
-    ti.height = height;
-    return true;
-}
-
-
-
 void main_loop(void* arg)
 {
+    PROFILE_FRAME()
+    
    SDL_GL_SetSwapInterval(1); // Enable vsync
     
     ImGuiIO& io = ImGui::GetIO();
@@ -177,7 +153,8 @@ extern "C" int main(int argc, const char *argv[])
          compiled.major, compiled.minor, compiled.patch);
     printf("Linked SDL version %d.%d.%d\n",
          linked.major, linked.minor, linked.patch);
-
+    
+    
     SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
     
     // Setup SDL
@@ -192,32 +169,32 @@ extern "C" int main(int argc, const char *argv[])
     // run this code on Chrome for Android for example.
 //    const char* glsl_version = "#version 100";
     //const char* glsl_version = "#version 300 es";
-//    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
-//    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
     
     // Create window with graphics context
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
+    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 0);
     SDL_DisplayMode current;
     SDL_GetCurrentDisplayMode(0, &current);
 //    SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
     SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
 
-    g_Window = SDL_CreateWindow("MilkDrop2-Portable-Emscripten", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1024, 1024, window_flags);
+    g_Window = SDL_CreateWindow("m1lkdr0p", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1024, 1024, window_flags);
     g_GLContext = SDL_GL_CreateContext(g_Window);
     if (!g_GLContext)
     {
-        fprintf(stderr, "Failed to initialize WebGL context!\n");
+        fprintf(stderr, "Failed to initialize WebGL context! %s\n", SDL_GetError());
         return 1;
     }
 //   SDL_GL_SetSwapInterval(1); // Enable vsync
     
     
     
-    _context = GLCreateContext(LoadTextureFromFile);
+    _context = render::gles::GLCreateContext();
     
     std::string resourceDir = "";
     std::string pluginDir =  resourceDir + "/assets";

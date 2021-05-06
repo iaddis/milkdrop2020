@@ -14,6 +14,11 @@ namespace Script { namespace mdpx {
 #define PROFILE_EXPRESSIONS_COUNT  0
 #define PROFILE_EXPRESSIONS_TIMING 0
 
+ValueType ReadGMegaBuf(int addr);
+void WrteGMegaBuf(int addr, ValueType v);
+ValueType ReadMegaBuf(int addr);
+void WrteMegaBuf(int addr, ValueType v);
+
 
     class Expression
     {
@@ -33,6 +38,7 @@ namespace Script { namespace mdpx {
         }
         
         virtual ValueType Evaluate(EvalContext ec) = 0;
+        virtual bool AssignTo(EvalContext ec, ValueType value)  {return false;}
         
         virtual bool IsStatement() {return false;}
         virtual void Print(std::ostream &o) = 0;
@@ -45,6 +51,7 @@ namespace Script { namespace mdpx {
         
         inline int GetType()            {return m_fn;}
         
+
         
         std::string GetOperatorName()
         {
