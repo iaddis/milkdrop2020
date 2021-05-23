@@ -29,6 +29,9 @@
 		2123BC022378CB4300912287 /* DrawBuffer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 2123BC012378CB4300912287 /* DrawBuffer.cpp */; };
 		2123BC032378CB4300912287 /* DrawBuffer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 2123BC012378CB4300912287 /* DrawBuffer.cpp */; };
 		2123BC042378CB4300912287 /* DrawBuffer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 2123BC012378CB4300912287 /* DrawBuffer.cpp */; };
+		212B1BB6264F8A8C00B078F4 /* libhlsl2glsl.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 212B1BB1264F8A1F00B078F4 /* libhlsl2glsl.a */; };
+		212B1BB7264F8AA400B078F4 /* libhlsl2glsl-ios.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 212B1BB3264F8A1F00B078F4 /* libhlsl2glsl-ios.a */; };
+		212B1BB8264F8AAC00B078F4 /* libhlsl2glsl-tvos.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 212B1BB5264F8A1F00B078F4 /* libhlsl2glsl-tvos.a */; };
 		212ED0111CEBCDDB00FE64CA /* VizController.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 212ED00F1CEBCDD800FE64CA /* VizController.cpp */; };
 		212ED0121CEBCDDD00FE64CA /* VizController.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 212ED00F1CEBCDD800FE64CA /* VizController.cpp */; };
 		212ED0131CEBCDDD00FE64CA /* VizController.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 212ED00F1CEBCDD800FE64CA /* VizController.cpp */; };
@@ -169,7 +172,6 @@
 		219E2CFF235631AD00BF712E /* Visualizer.mm in Sources */ = {isa = PBXBuildFile; fileRef = 219E2CFE235631AD00BF712E /* Visualizer.mm */; };
 		219E2D00235631AD00BF712E /* Visualizer.mm in Sources */ = {isa = PBXBuildFile; fileRef = 219E2CFE235631AD00BF712E /* Visualizer.mm */; };
 		219E2D01235631AD00BF712E /* Visualizer.mm in Sources */ = {isa = PBXBuildFile; fileRef = 219E2CFE235631AD00BF712E /* Visualizer.mm */; };
-		21A3B13F22990C6200540D1A /* libhlsl2glsl-ios.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 21A3B13E22990C5F00540D1A /* libhlsl2glsl-ios.a */; };
 		21A3B142229A6A2B00540D1A /* script-expression.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 21A3B140229A6A2B00540D1A /* script-expression.cpp */; };
 		21A3B143229A6A2B00540D1A /* script-expression.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 21A3B140229A6A2B00540D1A /* script-expression.cpp */; };
 		21A3B14F229B302E00540D1A /* script-caltab.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 21C418A11CEFA16300CF147E /* script-caltab.cpp */; };
@@ -183,7 +185,6 @@
 		21A3B15B229B302F00540D1A /* script-eval.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 21C418A41CEFA16300CF147E /* script-eval.cpp */; };
 		21A3B15C229B302F00540D1A /* script-lextab.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 21C418A51CEFA16300CF147E /* script-lextab.cpp */; };
 		21A3B15E229B302F00540D1A /* script-yylex.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 21C418A71CEFA16300CF147E /* script-yylex.cpp */; };
-		21A3B18A229C635000540D1A /* libhlsl2glsl-tvos.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 21A3B189229C635000540D1A /* libhlsl2glsl-tvos.a */; };
 		21B3CEC12427169A00EFC55D /* libz.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 21FF43AD23EE7BDE00AC9831 /* libz.tbd */; };
 		21B3CEC42427169B00EFC55D /* libz.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 21FF43AD23EE7BDE00AC9831 /* libz.tbd */; };
 		21B50FE72393409A00182AE1 /* context.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 21B50FE62393409A00182AE1 /* context.cpp */; };
@@ -225,7 +226,6 @@
 		21D6E8A6234EBB1100EC1E36 /* CommonApple.mm in Sources */ = {isa = PBXBuildFile; fileRef = 21D6E8A4234EBB1100EC1E36 /* CommonApple.mm */; };
 		21D6E8A7234EBB1100EC1E36 /* CommonApple.mm in Sources */ = {isa = PBXBuildFile; fileRef = 21D6E8A4234EBB1100EC1E36 /* CommonApple.mm */; };
 		21D6E8AB23504EFA00EC1E36 /* ExternalViewController.mm in Sources */ = {isa = PBXBuildFile; fileRef = 21D6E8AA23504EFA00EC1E36 /* ExternalViewController.mm */; };
-		21D7EE4D2292899C002437C0 /* libhlsl2glsl.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 21D7EE4A228F9456002437C0 /* libhlsl2glsl.a */; };
 		21DF7458261D281500C9777C /* imgui_tables.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 21DF7455261D281500C9777C /* imgui_tables.cpp */; };
 		21DF7459261D281500C9777C /* imgui_tables.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 21DF7455261D281500C9777C /* imgui_tables.cpp */; };
 		21DF745A261D281500C9777C /* imgui_tables.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 21DF7455261D281500C9777C /* imgui_tables.cpp */; };
@@ -327,46 +327,25 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		21A3B10F2298EF1D00540D1A /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 21D7EE45228F9456002437C0 /* hlslang.xcodeproj */;
-			proxyType = 1;
-			remoteGlobalIDString = 2B951C981135194700DBAF46;
-			remoteInfo = hlsl2glsl;
-		};
-		21A3B13D22990C5F00540D1A /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 21D7EE45228F9456002437C0 /* hlslang.xcodeproj */;
-			proxyType = 2;
-			remoteGlobalIDString = 21A3B13B22990C2700540D1A;
-			remoteInfo = "hlsl2glsl-ios";
-		};
-		21A3B188229C635000540D1A /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 21D7EE45228F9456002437C0 /* hlslang.xcodeproj */;
-			proxyType = 2;
-			remoteGlobalIDString = 21A3B185229C5B7300540D1A;
-			remoteInfo = "hlsl2glsl-tvos";
-		};
-		21D7EE49228F9456002437C0 /* PBXContainerItemProxy */ = {
+		212B1BB0264F8A1F00B078F4 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 21D7EE45228F9456002437C0 /* hlslang.xcodeproj */;
 			proxyType = 2;
 			remoteGlobalIDString = 2B951C991135194700DBAF46;
 			remoteInfo = hlsl2glsl;
 		};
-		21D7EE4B228F947A002437C0 /* PBXContainerItemProxy */ = {
+		212B1BB2264F8A1F00B078F4 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 21D7EE45228F9456002437C0 /* hlslang.xcodeproj */;
-			proxyType = 1;
-			remoteGlobalIDString = 2B951C981135194700DBAF46;
-			remoteInfo = hlsl2glsl;
+			proxyType = 2;
+			remoteGlobalIDString = 21A3B13B22990C2700540D1A;
+			remoteInfo = "hlsl2glsl-ios";
 		};
-		21F3EF082332D7D40028EB99 /* PBXContainerItemProxy */ = {
+		212B1BB4264F8A1F00B078F4 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 21D7EE45228F9456002437C0 /* hlslang.xcodeproj */;
-			proxyType = 1;
-			remoteGlobalIDString = 21A3B162229C5B7300540D1A;
+			proxyType = 2;
+			remoteGlobalIDString = 21A3B185229C5B7300540D1A;
 			remoteInfo = "hlsl2glsl-tvos";
 		};
 /* End PBXContainerItemProxy section */
@@ -385,6 +364,8 @@
 		21122828263FF151001F8FF9 /* ImageReader.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ImageReader.cpp; sourceTree = "<group>"; };
 		2112282C26400D61001F8FF9 /* CMakeLists.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = CMakeLists.txt; sourceTree = "<group>"; };
 		2114302122F798F8007D20DB /* script-functions.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "script-functions.js"; sourceTree = "<group>"; };
+		21167A8D2655CB63004159D5 /* cmake-build-android.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "cmake-build-android.sh"; sourceTree = "<group>"; };
+		21167A922655CB64004159D5 /* cmake-build-emscripten.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "cmake-build-emscripten.sh"; sourceTree = "<group>"; };
 		211D39DB1CB321500037799F /* Milkdrop-OSX.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Milkdrop-OSX.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		211D3A0D1CB3227D0037799F /* fft.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = fft.cpp; sourceTree = "<group>"; };
 		211D3A0E1CB3227D0037799F /* fft.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = fft.h; sourceTree = "<group>"; };
@@ -426,7 +407,7 @@
 		213C06911CE8CF35007DFA7D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		213C06921CE8CF35007DFA7D /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		213C06931CE8CF35007DFA7D /* main.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
-		2146E92A230E1A7900FEF946 /* stb */ = {isa = PBXFileReference; lastKnownFileType = folder; name = stb; path = external/stb; sourceTree = "<group>"; };
+		2146E92A230E1A7900FEF946 /* stb */ = {isa = PBXFileReference; lastKnownFileType = folder; path = stb; sourceTree = "<group>"; };
 		2146E92B230E1B3C00FEF946 /* ImageWriter.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = ImageWriter.cpp; sourceTree = "<group>"; };
 		2146E92C230E1B3C00FEF946 /* ImageWriter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ImageWriter.h; sourceTree = "<group>"; };
 		2146E9352312565500FEF946 /* keycode.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = keycode.h; sourceTree = "<group>"; };
@@ -519,9 +500,9 @@
 		21875FB52312827A00DE72E7 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		21875FB72312835F00DE72E7 /* context_metal.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = context_metal.mm; sourceTree = "<group>"; };
 		21875FC12312877D00DE72E7 /* ModelIO.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ModelIO.framework; path = System/Library/Frameworks/ModelIO.framework; sourceTree = SDKROOT; };
-		218928D423E10A5C006FC876 /* cpp-httplib */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "cpp-httplib"; path = "external/cpp-httplib"; sourceTree = "<group>"; };
+		218928D423E10A5C006FC876 /* cpp-httplib */ = {isa = PBXFileReference; lastKnownFileType = folder; path = "cpp-httplib"; sourceTree = "<group>"; };
 		2189E1F9235FE14300AEBEF3 /* KeyEvent.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = KeyEvent.h; sourceTree = "<group>"; };
-		2190716D238309B9001EDA9E /* ns-eel2 */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "ns-eel2"; path = "external/ns-eel2"; sourceTree = "<group>"; };
+		2190716D238309B9001EDA9E /* ns-eel2 */ = {isa = PBXFileReference; lastKnownFileType = folder; path = "ns-eel2"; sourceTree = "<group>"; };
 		219E2CFA2355877300BF712E /* context_metal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = context_metal.h; sourceTree = "<group>"; };
 		219E2CFE235631AD00BF712E /* Visualizer.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = Visualizer.mm; sourceTree = "<group>"; };
 		219E2D02235631BF00BF712E /* Visualizer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Visualizer.h; sourceTree = "<group>"; };
@@ -529,6 +510,7 @@
 		21A3B140229A6A2B00540D1A /* script-expression.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = "script-expression.cpp"; sourceTree = "<group>"; };
 		21A3B141229A6A2B00540D1A /* script-expression.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "script-expression.h"; sourceTree = "<group>"; };
 		21A3B18C229C82E600540D1A /* emscripten_main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = emscripten_main.cpp; sourceTree = "<group>"; };
+		21B1D3E8265A34F40092EB7E /* shell_minimal.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = shell_minimal.html; sourceTree = "<group>"; };
 		21B50FE62393409A00182AE1 /* context.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = context.cpp; sourceTree = "<group>"; };
 		21BEFB142372338C0070ED10 /* EventDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = EventDelegate.h; sourceTree = "<group>"; };
 		21C3A2B72325E50A00580C4D /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS12.4.sdk/System/Library/Frameworks/MetalKit.framework; sourceTree = DEVELOPER_DIR; };
@@ -553,7 +535,7 @@
 		21C418E51CEFA1F400CF147E /* VizController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = VizController.h; sourceTree = "<group>"; };
 		21C6328D22ACD4C30040F503 /* context_gles.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = context_gles.h; sourceTree = "<group>"; };
 		21C6329022AE2EAE0040F503 /* StopWatch.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = StopWatch.h; sourceTree = "<group>"; };
-		21CF806523AC636A00455F79 /* rapidjson */ = {isa = PBXFileReference; lastKnownFileType = folder; name = rapidjson; path = external/rapidjson; sourceTree = "<group>"; };
+		21CF806523AC636A00455F79 /* rapidjson */ = {isa = PBXFileReference; lastKnownFileType = folder; path = rapidjson; sourceTree = "<group>"; };
 		21D6255223143F3C00CA70D8 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = Platforms/AppleTVOS.platform/Developer/SDKs/AppleTVOS12.4.sdk/System/Library/Frameworks/Metal.framework; sourceTree = DEVELOPER_DIR; };
 		21D6255523143F3C00CA70D8 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = Platforms/AppleTVOS.platform/Developer/SDKs/AppleTVOS12.4.sdk/System/Library/Frameworks/MetalKit.framework; sourceTree = DEVELOPER_DIR; };
 		21D6255D2314477B00CA70D8 /* RenderViewControllerIOS.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = RenderViewControllerIOS.mm; sourceTree = "<group>"; };
@@ -563,7 +545,7 @@
 		21D6E8AA23504EFA00EC1E36 /* ExternalViewController.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = ExternalViewController.mm; sourceTree = "<group>"; };
 		21D6E8AE2350B9BB00EC1E36 /* ExternalViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ExternalViewController.h; sourceTree = "<group>"; };
 		21D7EE44228EDC1F002437C0 /* common.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = common.h; sourceTree = "<group>"; };
-		21D7EE45228F9456002437C0 /* hlslang.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = hlslang.xcodeproj; path = external/hlsl2glslfork/hlslang.xcodeproj; sourceTree = "<group>"; };
+		21D7EE45228F9456002437C0 /* hlslang.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = hlslang.xcodeproj; path = hlsl2glslfork/hlslang.xcodeproj; sourceTree = "<group>"; };
 		21D9D25F22A359E300AC44B9 /* emscripten_shell.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = emscripten_shell.html; sourceTree = "<group>"; };
 		21DF7455261D281500C9777C /* imgui_tables.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = imgui_tables.cpp; sourceTree = "<group>"; };
 		21DFB6B726436FA20046A9B0 /* ArchiveReader.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ArchiveReader.cpp; sourceTree = "<group>"; };
@@ -601,7 +583,6 @@
 		21DFB704264377540046A9B0 /* LzFindMt.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = LzFindMt.h; sourceTree = "<group>"; };
 		21DFB705264377540046A9B0 /* 7zDec.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = 7zDec.c; sourceTree = "<group>"; };
 		21DFB706264377540046A9B0 /* Lzma86.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Lzma86.h; sourceTree = "<group>"; };
-		21DFB707264377540046A9B0 /* LzmaEnc.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = LzmaEnc.h; sourceTree = "<group>"; };
 		21DFB708264377540046A9B0 /* Lzma2Dec.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Lzma2Dec.h; sourceTree = "<group>"; };
 		21DFB709264377540046A9B0 /* Aes.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Aes.h; sourceTree = "<group>"; };
 		21DFB70A264377540046A9B0 /* DllSecur.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DllSecur.h; sourceTree = "<group>"; };
@@ -614,7 +595,6 @@
 		21DFB711264377540046A9B0 /* Bcj2.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Bcj2.h; sourceTree = "<group>"; };
 		21DFB712264377540046A9B0 /* 7zVersion.rc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = 7zVersion.rc; sourceTree = "<group>"; };
 		21DFB713264377540046A9B0 /* Ppmd.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Ppmd.h; sourceTree = "<group>"; };
-		21DFB714264377540046A9B0 /* MtCoder.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MtCoder.h; sourceTree = "<group>"; };
 		21DFB715264377540046A9B0 /* Sha256.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = Sha256.c; sourceTree = "<group>"; };
 		21DFB716264377540046A9B0 /* 7zAlloc.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = 7zAlloc.h; sourceTree = "<group>"; };
 		21DFB717264377540046A9B0 /* Delta.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = Delta.c; sourceTree = "<group>"; };
@@ -649,6 +629,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				212B1BB6264F8A8C00B078F4 /* libhlsl2glsl.a in Frameworks */,
 				21303D3F2459480E00E62C1F /* AVFoundation.framework in Frameworks */,
 				21303D402459480E00E62C1F /* AVKit.framework in Frameworks */,
 				21FF43B023EE7BDE00AC9831 /* libz.tbd in Frameworks */,
@@ -656,7 +637,6 @@
 				21875F8323127FB200DE72E7 /* MetalKit.framework in Frameworks */,
 				21875F8423127FB200DE72E7 /* Metal.framework in Frameworks */,
 				2175203922C7A3A8006B4527 /* OpenAL.framework in Frameworks */,
-				21D7EE4D2292899C002437C0 /* libhlsl2glsl.a in Frameworks */,
 				21540E0E1CF5993100580C16 /* AudioToolbox.framework in Frameworks */,
 				21540DCD1CF593DA00580C16 /* AudioUnit.framework in Frameworks */,
 				21540DCB1CF58CD100580C16 /* CoreAudio.framework in Frameworks */,
@@ -667,13 +647,13 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				212B1BB7264F8AA400B078F4 /* libhlsl2glsl-ios.a in Frameworks */,
 				21303D432459481C00E62C1F /* AVFoundation.framework in Frameworks */,
 				21303D442459481C00E62C1F /* AVKit.framework in Frameworks */,
 				21C3A2B92325E50A00580C4D /* MetalKit.framework in Frameworks */,
 				21B3CEC42427169B00EFC55D /* libz.tbd in Frameworks */,
 				21C3A2BA2325E50A00580C4D /* Metal.framework in Frameworks */,
 				2175209222CC72BF006B4527 /* OpenAL.framework in Frameworks */,
-				21A3B13F22990C6200540D1A /* libhlsl2glsl-ios.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -681,13 +661,13 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				212B1BB8264F8AAC00B078F4 /* libhlsl2glsl-tvos.a in Frameworks */,
 				21303D3C245947EB00E62C1F /* AVKit.framework in Frameworks */,
 				21303D3A245947E400E62C1F /* AVFoundation.framework in Frameworks */,
 				21D6255623143F3C00CA70D8 /* Metal.framework in Frameworks */,
 				21B3CEC12427169A00EFC55D /* libz.tbd in Frameworks */,
 				21D6255723143F3C00CA70D8 /* MetalKit.framework in Frameworks */,
 				2175209122CC72BE006B4527 /* OpenAL.framework in Frameworks */,
-				21A3B18A229C635000540D1A /* libhlsl2glsl-tvos.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -698,6 +678,8 @@
 			isa = PBXGroup;
 			children = (
 				219E4FBD263E71D300386E4B /* CMakeLists.txt */,
+				21167A8D2655CB63004159D5 /* cmake-build-android.sh */,
+				21167A922655CB64004159D5 /* cmake-build-emscripten.sh */,
 				2175206222C87D20006B4527 /* external */,
 				21C418831CEFA0C100CF147E /* assets */,
 				213C06681CE8CF07007DFA7D /* app */,
@@ -766,6 +748,24 @@
 				2175202422BAF9EE006B4527 /* IAudioAnalyzer.h */,
 			);
 			path = vis_milk2;
+			sourceTree = "<group>";
+		};
+		212B1BA7264F894B00B078F4 /* lzma1801 */ = {
+			isa = PBXGroup;
+			children = (
+				21DFB6BE264377540046A9B0 /* C */,
+			);
+			path = lzma1801;
+			sourceTree = "<group>";
+		};
+		212B1BAA264F8A1F00B078F4 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				212B1BB1264F8A1F00B078F4 /* libhlsl2glsl.a */,
+				212B1BB3264F8A1F00B078F4 /* libhlsl2glsl-ios.a */,
+				212B1BB5264F8A1F00B078F4 /* libhlsl2glsl-tvos.a */,
+			);
+			name = Products;
 			sourceTree = "<group>";
 		};
 		213C06681CE8CF07007DFA7D /* app */ = {
@@ -885,8 +885,7 @@
 				2170DEBA263FDE9800B134A2 /* ioapi_buf.h */,
 				2170DEBD263FDE9800B134A2 /* aes */,
 			);
-			name = minizip;
-			path = external/minizip;
+			path = minizip;
 			sourceTree = "<group>";
 		};
 		2170DEBD263FDE9800B134A2 /* aes */ = {
@@ -920,7 +919,7 @@
 		2175206222C87D20006B4527 /* external */ = {
 			isa = PBXGroup;
 			children = (
-				21DFB6BD264377460046A9B0 /* lzma */,
+				212B1BA7264F894B00B078F4 /* lzma1801 */,
 				2170DEA2263FDE9800B134A2 /* minizip */,
 				218928D423E10A5C006FC876 /* cpp-httplib */,
 				21CF806523AC636A00455F79 /* rapidjson */,
@@ -929,7 +928,7 @@
 				21D7EE45228F9456002437C0 /* hlslang.xcodeproj */,
 				2175206322C87D8E006B4527 /* imgui */,
 			);
-			name = external;
+			path = external;
 			sourceTree = "<group>";
 		};
 		2175206322C87D8E006B4527 /* imgui */ = {
@@ -950,14 +949,14 @@
 				2175207322C87D8E006B4527 /* imgui_demo.cpp */,
 				2175207422C87D8E006B4527 /* imgui_draw.cpp */,
 			);
-			name = imgui;
-			path = external/imgui;
+			path = imgui;
 			sourceTree = "<group>";
 		};
 		21A3B18B229C82E600540D1A /* emscripten */ = {
 			isa = PBXGroup;
 			children = (
 				210B8FA325D6775F00E0562C /* Makefile */,
+				21B1D3E8265A34F40092EB7E /* shell_minimal.html */,
 				21D9D25F22A359E300AC44B9 /* emscripten_shell.html */,
 				21A3B18C229C82E600540D1A /* emscripten_main.cpp */,
 				21EAA95E23650EB9001B2641 /* keycode_emscripten.cpp */,
@@ -1026,24 +1025,6 @@
 			path = app/CommonApple;
 			sourceTree = "<group>";
 		};
-		21D7EE46228F9456002437C0 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				21D7EE4A228F9456002437C0 /* libhlsl2glsl.a */,
-				21A3B13E22990C5F00540D1A /* libhlsl2glsl-ios.a */,
-				21A3B189229C635000540D1A /* libhlsl2glsl-tvos.a */,
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
-		21DFB6BD264377460046A9B0 /* lzma */ = {
-			isa = PBXGroup;
-			children = (
-				21DFB6BE264377540046A9B0 /* C */,
-			);
-			path = lzma;
-			sourceTree = "<group>";
-		};
 		21DFB6BE264377540046A9B0 /* C */ = {
 			isa = PBXGroup;
 			children = (
@@ -1103,9 +1084,7 @@
 				21DFB722264377540046A9B0 /* Lzma2Enc.h */,
 				21DFB706264377540046A9B0 /* Lzma86.h */,
 				21DFB724264377540046A9B0 /* LzmaDec.h */,
-				21DFB707264377540046A9B0 /* LzmaEnc.h */,
 				21DFB6FC264377540046A9B0 /* LzmaLib.h */,
-				21DFB714264377540046A9B0 /* MtCoder.h */,
 				21DFB713264377540046A9B0 /* Ppmd.h */,
 				21DFB720264377540046A9B0 /* Ppmd7.h */,
 				21DFB6CC264377540046A9B0 /* Precomp.h */,
@@ -1117,9 +1096,8 @@
 				21DFB72C264377550046A9B0 /* XzEnc.h */,
 				21DFB712264377540046A9B0 /* 7zVersion.rc */,
 			);
-			name = C;
-			path = external/lzma1801/C;
-			sourceTree = SOURCE_ROOT;
+			path = C;
+			sourceTree = "<group>";
 		};
 		44CCF6C423028F7C0071EB0F /* mdp-eel2 */ = {
 			isa = PBXGroup;
@@ -1162,7 +1140,6 @@
 			buildRules = (
 			);
 			dependencies = (
-				21D7EE4C228F947A002437C0 /* PBXTargetDependency */,
 			);
 			name = "Milkdrop-OSX";
 			productName = "Milkdrop-OSX";
@@ -1180,7 +1157,6 @@
 			buildRules = (
 			);
 			dependencies = (
-				21A3B1102298EF1D00540D1A /* PBXTargetDependency */,
 			);
 			name = "Milkdrop-iOS";
 			productName = "Milkdrop-iOS";
@@ -1198,7 +1174,6 @@
 			buildRules = (
 			);
 			dependencies = (
-				21F3EF092332D7D40028EB99 /* PBXTargetDependency */,
 			);
 			name = "Milkdrop-tvOS";
 			productName = "Milkdrop-tvOS";
@@ -1253,7 +1228,7 @@
 			projectDirPath = "";
 			projectReferences = (
 				{
-					ProductGroup = 21D7EE46228F9456002437C0 /* Products */;
+					ProductGroup = 212B1BAA264F8A1F00B078F4 /* Products */;
 					ProjectRef = 21D7EE45228F9456002437C0 /* hlslang.xcodeproj */;
 				},
 			);
@@ -1267,25 +1242,25 @@
 /* End PBXProject section */
 
 /* Begin PBXReferenceProxy section */
-		21A3B13E22990C5F00540D1A /* libhlsl2glsl-ios.a */ = {
-			isa = PBXReferenceProxy;
-			fileType = archive.ar;
-			path = "libhlsl2glsl-ios.a";
-			remoteRef = 21A3B13D22990C5F00540D1A /* PBXContainerItemProxy */;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
-		21A3B189229C635000540D1A /* libhlsl2glsl-tvos.a */ = {
-			isa = PBXReferenceProxy;
-			fileType = archive.ar;
-			path = "libhlsl2glsl-tvos.a";
-			remoteRef = 21A3B188229C635000540D1A /* PBXContainerItemProxy */;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
-		21D7EE4A228F9456002437C0 /* libhlsl2glsl.a */ = {
+		212B1BB1264F8A1F00B078F4 /* libhlsl2glsl.a */ = {
 			isa = PBXReferenceProxy;
 			fileType = archive.ar;
 			path = libhlsl2glsl.a;
-			remoteRef = 21D7EE49228F9456002437C0 /* PBXContainerItemProxy */;
+			remoteRef = 212B1BB0264F8A1F00B078F4 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		212B1BB3264F8A1F00B078F4 /* libhlsl2glsl-ios.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = "libhlsl2glsl-ios.a";
+			remoteRef = 212B1BB2264F8A1F00B078F4 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		212B1BB5264F8A1F00B078F4 /* libhlsl2glsl-tvos.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = "libhlsl2glsl-tvos.a";
+			remoteRef = 212B1BB4264F8A1F00B078F4 /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
 /* End PBXReferenceProxy section */
@@ -1630,24 +1605,6 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
-/* Begin PBXTargetDependency section */
-		21A3B1102298EF1D00540D1A /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = hlsl2glsl;
-			targetProxy = 21A3B10F2298EF1D00540D1A /* PBXContainerItemProxy */;
-		};
-		21D7EE4C228F947A002437C0 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = hlsl2glsl;
-			targetProxy = 21D7EE4B228F947A002437C0 /* PBXContainerItemProxy */;
-		};
-		21F3EF092332D7D40028EB99 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = "hlsl2glsl-tvos";
-			targetProxy = 21F3EF082332D7D40028EB99 /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
-
 /* Begin PBXVariantGroup section */
 		213C067F1CE8CF25007DFA7D /* LaunchScreen.storyboard */ = {
 			isa = PBXVariantGroup;
@@ -1811,6 +1768,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 10.13;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.icer.Milkdrop-OSX";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1832,6 +1790,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 10.13;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.icer.Milkdrop-OSX";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1850,6 +1809,7 @@
 				INFOPLIST_FILE = "$(SRCROOT)/app/iOS/Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.icer.Milkdrop-iOS";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -1868,6 +1828,7 @@
 				INFOPLIST_FILE = "$(SRCROOT)/app/iOS/Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.icer.Milkdrop-iOS";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -1886,6 +1847,7 @@
 				DEVELOPMENT_TEAM = QYP333B5SE;
 				INFOPLIST_FILE = "$(SRCROOT)/app/tvOS/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.icer.Milkdrop-tvOS";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1905,6 +1867,7 @@
 				DEVELOPMENT_TEAM = QYP333B5SE;
 				INFOPLIST_FILE = "$(SRCROOT)/app/tvOS/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.icer.Milkdrop-tvOS";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

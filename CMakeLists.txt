@@ -2,7 +2,9 @@ cmake_minimum_required(VERSION 3.4.1)
 project(m1lkdr0p LANGUAGES C CXX)
 
 
+if (NOT EMSCRIPTEN)
 find_package(ZLIB REQUIRED)
+endif()
 
 if (ZLIB_FOUND)
     include_directories(${ZLIB_INCLUDE_DIRS})
@@ -27,18 +29,32 @@ set(EXTERNAL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external)
 set(IMGUI_SOURCE_DIR ${EXTERNAL_DIR}/imgui)
 set(LZMA_SOURCE_DIR ${EXTERNAL_DIR}/lzma1801/C)
 
-
+#
+# add hlsl2glslfork
+#
 add_subdirectory(${EXTERNAL_DIR}/hlsl2glslfork)
 
+#
+# add minizip
+#
 # option(USE_AES "enables building of aes library" ON)
 SET(USE_AES OFF CACHE BOOL "" FORCE)
 add_subdirectory(${EXTERNAL_DIR}/minizip)
 
+#
+# add OVRSDK
+#
+if (OVR)
+    ## OVR library
+    set(OVR_ROOT_DIR ${EXTERNAL_DIR}/ovr_sdk_mobile_1.45.0)
+    set(VRAPI_LIB_BUILD_TYPE Release)
+    set(VRAPI_LIB_PATH "${OVR_ROOT_DIR}/VrApi/Libs/Android/${ANDROID_ABI}/${VRAPI_LIB_BUILD_TYPE}/libvrapi.so")
+    add_library(vrapi SHARED IMPORTED GLOBAL)
+    set_target_properties(vrapi PROPERTIES IMPORTED_LOCATION ${VRAPI_LIB_PATH})
+endif()
 
-# set(CMAKE_CXX_FLAGS_DEBUG "-g -DANDROID_CONFIG_DEBUG")
-# set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DANDROID_CONFIG_RELEASE")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti -fno-exceptions -Wall -Wno-reorder -Wno-deprecated-register -Wno-self-assign -Wno-c++11-narrowing ")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-reorder -Wno-deprecated-register -Wno-self-assign -Wno-c++11-narrowing -Wno-misleading-indentation ")
 
 set(IMGUI_SOURCE
         ${IMGUI_SOURCE_DIR}/imgui.cpp
@@ -46,7 +62,6 @@ set(IMGUI_SOURCE
         ${IMGUI_SOURCE_DIR}/imgui_widgets.cpp
         ${IMGUI_SOURCE_DIR}/imgui_demo.cpp
         ${IMGUI_SOURCE_DIR}/imgui_tables.cpp
-        ${COMMON_SOURCE_DIR}/imgui_support.cpp
         )
 
 set(LZMA_SOURCE
@@ -90,6 +105,7 @@ set(MDP_SOURCE
         ${COMMON_SOURCE_DIR}/ImageWriter.cpp
         ${COMMON_SOURCE_DIR}/VizController.cpp
         ${COMMON_SOURCE_DIR}/TProfiler.cpp
+        ${COMMON_SOURCE_DIR}/imgui_support.cpp
         ${COMMON_SOURCE_DIR}/vis_milk2/fft.cpp
         ${COMMON_SOURCE_DIR}/vis_milk2/milkdropfs.cpp
         ${COMMON_SOURCE_DIR}/vis_milk2/plugin.cpp
@@ -121,6 +137,7 @@ set(LIBS
     )
 
 set(INCLUDE_DIRS
+        ${IMGUI_SOURCE_DIR}
         ${COMMON_SOURCE_DIR}
         ${COMMON_SOURCE_DIR}/script
         ${COMMON_SOURCE_DIR}/script/mdp-eel2
@@ -165,6 +182,54 @@ if (APPLE)
     
 
     set_property (TARGET ${CMAKE_PROJECT_NAME} APPEND_STRING PROPERTY COMPILE_FLAGS "-fobjc-arc")
+
+elseif (EMSCRIPTEN)
+
+
+    include_directories(
+        ${INCLUDE_DIRS}
+    )
+    
+    SET(APP_NAME ${CMAKE_PROJECT_NAME} )
+
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -s USE_ZLIB -Wno-deprecated-register")
+
+    add_executable(${APP_NAME}
+                ${MDP_SOURCE}
+                ${LZMA_SOURCE}
+                ${IMGUI_SOURCE}
+                ${COMMON_SOURCE_DIR}/render/context_gles.cpp
+                ${APP_SOURCE_DIR}/emscripten/emscripten_main.cpp
+              )
+
+    # Include libraries needed for lib
+    target_link_libraries(${APP_NAME}
+                ${LIBS}
+            )
+            
+    set(SHELL_FILE ${CMAKE_SOURCE_DIR}/app/emscripten/shell_minimal.html )
+
+    set_target_properties(${APP_NAME} PROPERTIES LINK_FLAGS
+            "--preload-file ${CMAKE_SOURCE_DIR}/assets@/assets \
+            --shell-file ${SHELL_FILE} \
+             -emrun \
+             -s TOTAL_MEMORY=536870912 \
+             -s LLD_REPORT_UNDEFINED \
+             -s DEMANGLE_SUPPORT=1 \
+             -s WASM=1 \
+             -s ASSERTIONS=1 \
+             -s USE_WEBGL2=1 \
+             -s USE_SDL=2 \
+             -s MIN_WEBGL_VERSION=2 \
+             -s MAX_WEBGL_VERSION=2 \
+             -s DISABLE_DEPRECATED_FIND_EVENT_TARGET_BEHAVIOR=1 \
+             -mnontrapping-fptoint \
+             -lopenal"
+            )
+
+    set(CMAKE_EXECUTABLE_SUFFIX ".html")
+#    set_target_properties(${APP_NAME} PROPERTIES OUTPUT_NAME "m1lkdr0p.html")
+
 
 
 

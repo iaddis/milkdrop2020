@@ -1,14 +1,5 @@
 
-// dear imgui: standalone example application for Emscripten, using SDL2 + OpenGL3
-// This is mostly the same code as the SDL2 + OpenGL3 example, simply with the modifications needed to run on Emscripten.
-// It is possible to combine both code into a single source file that will compile properly on Desktop and using Emscripten.
-// See https://github.com/ocornut/imgui/pull/2492 as an example on how to do just that.
-//
-// If you are new to dear imgui, see examples/README.txt and documentation at the top of imgui.cpp.
-// (Emscripten is a C++-to-javascript compiler, used to publish executables for the web. See https://emscripten.org/)
-
 #include "../external/imgui/imgui.h"
-#include "../external/imgui/backends/imgui_impl_sdl.h"
 #include "imgui_support.h"
 #include <stdio.h>
 #include <assert.h>
@@ -20,8 +11,6 @@
 #include <EGL/egl.h>
 #include <emscripten/html5.h>
 #include <emscripten/trace.h>
-
-#include "../external/imgui/imgui.h"
 
 #include "render/context.h"
 #include "render/context_gles.h"
@@ -36,71 +25,124 @@ using namespace render;
 
 // Emscripten requires to have full control over the main loop. We're going to store our SDL book-keeping variables globally.
 // Having a single function that acts as a loop prevents us to store state in the stack of said function. So we need some location for this.
-static SDL_Window*     g_Window = NULL;
-static SDL_GLContext   g_GLContext = NULL;
+static SDL_Window *g_Window;
+static EMSCRIPTEN_WEBGL_CONTEXT_HANDLE g_context_handle;
 static ContextPtr _context;
 static VizControllerPtr vizController;
 static IAudioSourcePtr m_audioSource;
+static bool         g_MousePressed[3] = { false, false, false };
+
+static void SetCanvasFocus()
+{
+    // needed to ensure canvas has focus
+    EM_ASM({
+        var canvas = document.getElementById('canvas');
+        if (canvas)
+            canvas.focus();
+    });
+}
+
+
+static void ShowOutputTextArea()
+{
+    EM_ASM({
+        // show output element
+        var output = document.getElementById('output');
+        if (output)
+            output.style.display = 'block';
+    });
+}
+
+
+static void UpdateMousePosAndButtons()
+{
+    ImGuiIO& io = ImGui::GetIO();
+
+    int mx, my;
+    Uint32 mouse_buttons = SDL_GetMouseState(&mx, &my);
+    io.MouseDown[0] = g_MousePressed[0] || (mouse_buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;  // If a mouse press event came, always pass it as "mouse held this frame", so we don't miss click-release events that are shorter than 1 frame.
+    io.MouseDown[1] = g_MousePressed[1] || (mouse_buttons & SDL_BUTTON(SDL_BUTTON_RIGHT)) != 0;
+    io.MouseDown[2] = g_MousePressed[2] || (mouse_buttons & SDL_BUTTON(SDL_BUTTON_MIDDLE)) != 0;
+    g_MousePressed[0] = g_MousePressed[1] = g_MousePressed[2] = false;
+
+    io.MousePos = ImVec2((float)mx, (float)my);
+}
+
+
+static bool ProcessEvent(const SDL_Event* event)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    switch (event->type)
+    {
+    case SDL_MOUSEWHEEL:
+        {
+            if (event->wheel.x > 0) io.MouseWheelH += 1;
+            if (event->wheel.x < 0) io.MouseWheelH -= 1;
+            if (event->wheel.y > 0) io.MouseWheel += 1;
+            if (event->wheel.y < 0) io.MouseWheel -= 1;
+            return true;
+        }
+    case SDL_MOUSEBUTTONDOWN:
+        {
+            if (event->button.button == SDL_BUTTON_LEFT) g_MousePressed[0] = true;
+            if (event->button.button == SDL_BUTTON_RIGHT) g_MousePressed[1] = true;
+            if (event->button.button == SDL_BUTTON_MIDDLE) g_MousePressed[2] = true;
+            return true;
+        }
+    case SDL_TEXTINPUT:
+        {
+            io.AddInputCharactersUTF8(event->text.text);
+            return true;
+        }
+    case SDL_KEYDOWN:
+    case SDL_KEYUP:
+        {
+            int key = event->key.keysym.sym;
+            if (key >= 0 && key < IM_ARRAYSIZE(io.KeysDown))
+            {
+                io.KeysDown[key] = (event->type == SDL_KEYDOWN);
+            }
+            io.KeyShift = ((SDL_GetModState() & KMOD_SHIFT) != 0);
+            io.KeyCtrl = ((SDL_GetModState() & KMOD_CTRL) != 0);
+            io.KeyAlt = ((SDL_GetModState() & KMOD_ALT) != 0);
+            io.KeySuper = ((SDL_GetModState() & KMOD_GUI) != 0);
+            return true;
+        }
+    }
+    return false;
+}
+
+
 
 void main_loop(void* arg)
 {
     PROFILE_FRAME()
     
-   SDL_GL_SetSwapInterval(1); // Enable vsync
     
     ImGuiIO& io = ImGui::GetIO();
+    IM_UNUSED(io); 
     IM_UNUSED(arg); // We can pass this argument as the second parameter of emscripten_set_main_loop_arg(), but we don't use that.
     
+    SetCanvasFocus();
+    
     // Poll and handle events (inputs, window resize, etc.)
-    // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
-    // - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application.
-    // - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application.
-    // Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
     SDL_Event event;
     while (SDL_PollEvent(&event))
     {
-        switch (event.type)
-        {
-            case SDL_MOUSEWHEEL:
-            case SDL_MOUSEBUTTONDOWN:
-            case SDL_MOUSEBUTTONUP:
-            case SDL_TEXTINPUT:
-                ImGui_ImplSDL2_ProcessEvent(&event);
-                break;
-                
-            case SDL_KEYUP:
-            case SDL_KEYDOWN:
-            {
-//                printf("key: %c %c\n", event.key.keysym.scancode, event.key.keysym.sym);
-                
-                KeyEvent ke;
-                ke.c = 0; //(char) event.key.keysym.mod;
-//                ke.code = (KeyCode)event.key.keysym.sym;
-                ke.code = (KeyCode)event.key.keysym.scancode;
-
-                ke.KeyShift = ((event.key.keysym.mod & KMOD_SHIFT) != 0);
-                ke.KeyCtrl = ((event.key.keysym.mod & KMOD_CTRL) != 0);
-                ke.KeyAlt = ((event.key.keysym.mod & KMOD_ALT) != 0);
-                ke.KeyCommand = ((event.key.keysym.mod & KMOD_GUI) != 0);
-                if (event.type == SDL_KEYDOWN)
-                    vizController->OnKeyDown(ke);
-                else
-                    vizController->OnKeyUp(ke);
-                break;
-            }
-        }
-
-        // Capture events here, based on io.WantCaptureMouse and io.WantCaptureKeyboard
+        ProcessEvent(&event);
     }
     
-    // Rendering
-    SDL_GL_MakeCurrent(g_Window, g_GLContext);
+    
+    emscripten_webgl_make_context_current(g_context_handle);
+    
+    SDL_GL_SetSwapInterval(1); // Enable vsync
 
-    float dpr = (float)emscripten_get_device_pixel_ratio();
-
-    int width, height;
-    SDL_GetWindowSize(g_Window, &width, &height);
-    emscripten_set_canvas_element_size("canvas", width, height);
+    double width, height;
+    emscripten_get_element_css_size("canvas", &width, &height);
+    emscripten_set_canvas_element_size("canvas", (int)width, (int)height);
+    
+    double dpr = emscripten_get_device_pixel_ratio();
+    emscripten_set_canvas_element_size("canvas", (int)(width * dpr), (int)(height * dpr));
 
     int buffer_width, buffer_height;
     EMSCRIPTEN_WEBGL_CONTEXT_HANDLE webgl_context = emscripten_webgl_get_current_context();
@@ -122,16 +164,17 @@ void main_loop(void* arg)
     _context->SetDisplayInfo(info);
 
 
-    ImGui_ImplSDL2_NewFrame(g_Window);
-
+    UpdateMousePosAndButtons();
 
     _context->BeginScene();
     vizController->Render(0, 1);
     _context->EndScene();
     _context->Present();
 
+    
+    emscripten_webgl_commit_frame();
 
-    SDL_GL_SwapWindow(g_Window);
+//    SDL_GL_SwapWindow(g_Window);
 }
 
 void HttpPut(std::string url, const std::string &json, std::function<void (const std::string *)> complete)
@@ -155,43 +198,36 @@ extern "C" int main(int argc, const char *argv[])
          linked.major, linked.minor, linked.patch);
     
     
-    SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
-    
-    // Setup SDL
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_JOYSTICK) != 0)
-    {
-        printf("Error: %s\n", SDL_GetError());
+    EmscriptenWebGLContextAttributes attr = {};
+    attr.alpha = false;
+    attr.depth = false;
+    attr.stencil = false;
+    attr.antialias = false;
+    attr.premultipliedAlpha = false;
+    attr.preserveDrawingBuffer = false;
+    attr.majorVersion = 2;
+    attr.minorVersion = 0;
+    attr.enableExtensionsByDefault = true;
+    g_context_handle = emscripten_webgl_create_context("canvas", &attr);
+    if (!g_context_handle) {
+        LogError("This browser does not support WebGL2. If using safari, enable WebGL in the experimental settings\n");
+        ShowOutputTextArea();
         return -1;
     }
     
-    // For the browser using Emscripten, we are going to use WebGL1 with GL ES2. See the Makefile. for requirement details.
-    // It is very likely the generated file won't work in many browsers. Firefox is the only sure bet, but I have successfully
-    // run this code on Chrome for Android for example.
-//    const char* glsl_version = "#version 100";
-    //const char* glsl_version = "#version 300 es";
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+    emscripten_webgl_make_context_current(g_context_handle);
     
-    // Create window with graphics context
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
-    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 0);
-    SDL_DisplayMode current;
-    SDL_GetCurrentDisplayMode(0, &current);
-//    SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
-    SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
-
-    g_Window = SDL_CreateWindow("m1lkdr0p", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1024, 1024, window_flags);
-    g_GLContext = SDL_GL_CreateContext(g_Window);
-    if (!g_GLContext)
+    // Setup SDL
+    if (SDL_Init(SDL_INIT_VIDEO) != 0)
     {
-        fprintf(stderr, "Failed to initialize WebGL context! %s\n", SDL_GetError());
-        return 1;
+        LogError("SDL_GetError: %s\n", SDL_GetError());
+        ShowOutputTextArea();
+        return -1;
     }
-//   SDL_GL_SetSwapInterval(1); // Enable vsync
     
+    
+    SDL_WindowFlags window_flags = (SDL_WindowFlags)( SDL_WINDOW_RESIZABLE);
+    g_Window = SDL_CreateWindow("m1lkdr0p", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1024, 1024, window_flags);
     
     
     _context = render::gles::GLCreateContext();
@@ -202,9 +238,11 @@ extern "C" int main(int argc, const char *argv[])
     
     vizController = CreateVizController(_context, pluginDir, userDir);
     
-    // Setup Platform/Renderer bindings
-    ImGui_ImplSDL2_InitForOpenGL(g_Window, g_GLContext);
-
+    // Setup backend capabilities flags
+    ImGuiIO& io = ImGui::GetIO();
+//    io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;       // We can honor GetMouseCursor() values (optional)
+//    io.BackendFlags |= ImGuiBackendFlags_HasSetMousePos;        // We can honor io.WantSetMousePos requests (optional, rarely used)
+    io.BackendPlatformName = "emscripten";
     
     // This function call won't return, and will engage in an infinite loop, processing events from the browser, and dispatching them.
     emscripten_set_main_loop_arg(main_loop, NULL, 0, true);

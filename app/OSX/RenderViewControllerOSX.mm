@@ -44,14 +44,21 @@ static KeyEvent ConvertKeyEvent(NSEvent *event)
 
 - (void)keyDown:(NSEvent *)event
 {
-    PROFILE_FUNCTION()
+    PROFILE_FUNCTION_CAT("input")
 
     KeyEvent ke = ConvertKeyEvent(event);
-    [self.visualizer onKeyDown:ke];
-
-
 
     ImGuiIO& io = ImGui::GetIO();
+    io.KeyCtrl      = ke.KeyCtrl;
+    io.KeyShift     = ke.KeyShift;
+    io.KeyAlt       = ke.KeyAlt;
+    io.KeySuper     = ke.KeyCommand;
+    if (ke.code != 0)
+    {
+       io.KeysDown[ke.code] = true;
+    }
+
+
     NSString* str = event.characters;
     int len = (int)[str length];
     for (int i = 0; i < len; i++)
@@ -67,7 +74,16 @@ static KeyEvent ConvertKeyEvent(NSEvent *event)
     PROFILE_FUNCTION_CAT("input")
 
     KeyEvent ke = ConvertKeyEvent(event);
-    [self.visualizer onKeyUp:ke];
+    
+    ImGuiIO& io = ImGui::GetIO();
+    io.KeyCtrl      = ke.KeyCtrl;
+    io.KeyShift     = ke.KeyShift;
+    io.KeyAlt       = ke.KeyAlt;
+    io.KeySuper     = ke.KeyCommand;
+    if (ke.code != 0)
+    {
+       io.KeysDown[ke.code] = false;
+    }
 }
 
 
@@ -259,7 +275,7 @@ bool UseGL = false;
     @autoreleasepool {
         PROFILE_FRAME()
 
-        ImGui_ImplOSX_NewFrame();
+        ImGui_ImplOSX_NewFrame(view);
 
 
       //    [view bindDrawable];
@@ -296,7 +312,7 @@ bool UseGL = false;
     @autoreleasepool {
         PROFILE_FRAME()
 
-        ImGui_ImplOSX_NewFrame();
+        ImGui_ImplOSX_NewFrame(view);
         
 
 

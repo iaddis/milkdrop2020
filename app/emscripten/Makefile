@@ -11,21 +11,17 @@ CC         = emcc
 
 S3_BUCKET_URL = s3://m1lkdr0p.com/
 
-EMSDK_ROOT = ../emsdk_portable
-EMSDK      = $(EMSDK_ROOT)/emsdk
-EMENV      = $(EMSDK_ROOT)/emsdk_set_env.sh
-
 CONFIG     ?= release
 BUILD_DIR   = build/emscripten/$(CONFIG)
 OUTPUT_DIR  = $(BUILD_DIR)/bin
 OUTPUT_HTML = $(OUTPUT_DIR)/index.html
 OUTPUT_WASM = $(OUTPUT_DIR)/index.wasm
 OUTPUT_DATA = $(OUTPUT_DIR)/index.data
+OUTPUT_FAVICON = $(OUTPUT_DIR)/favicon.ico
+
 EMRUN       = emrun
 BROWSER    ?= chrome
 
-
-HLSL2GLSL_ROOT := external/hlsl2glslfork/hlslang
 
 INCLUDE_DIRS += src
 INCLUDE_DIRS += src/script
@@ -34,24 +30,41 @@ INCLUDE_DIRS += src/script/mdp-eel2
 SOURCES := $(shell find src -name '*.cpp')
 SOURCES += $(shell find src -name '*.c' )
 SOURCES += $(shell find app/emscripten -name '*.cpp')
+WEBROOT_SOURCES += $(shell find app/emscripten/www)
 
 # include ImGui
-SOURCES += external/imgui/imgui.cpp
-SOURCES += external/imgui/imgui_widgets.cpp
-SOURCES += external/imgui/backends/imgui_impl_sdl.cpp
-SOURCES += external/imgui/imgui_draw.cpp
-SOURCES += external/imgui/imgui_demo.cpp
-SOURCES += external/imgui/imgui_tables.cpp
+IMGUI_ROOT := external/imgui
+SOURCES += $(IMGUI_ROOT)/imgui.cpp
+SOURCES += $(IMGUI_ROOT)/imgui_widgets.cpp
+SOURCES += $(IMGUI_ROOT)/imgui_draw.cpp
+SOURCES += $(IMGUI_ROOT)/imgui_demo.cpp
+SOURCES += $(IMGUI_ROOT)/imgui_tables.cpp
+INCLUDE_DIRS += $(IMGUI_ROOT)
 
+
+# HLSL2GLSL
+
+HLSL2GLSL_ROOT := external/hlsl2glslfork/hlslang
 SOURCES += $(shell find $(HLSL2GLSL_ROOT)/GLSLCodeGen -name '*.cpp')
 SOURCES += $(shell find $(HLSL2GLSL_ROOT)/MachineIndependent -name '*.cpp')
 SOURCES += $(shell find $(HLSL2GLSL_ROOT)/OSDependent/Emscripten -name '*.cpp')
+INCLUDE_DIRS += $(HLSL2GLSL_ROOT)
+INCLUDE_DIRS += $(HLSL2GLSL_ROOT)/hlslang
+INCLUDE_DIRS += $(HLSL2GLSL_ROOT)/Include
+INCLUDE_DIRS += $(HLSL2GLSL_ROOT)/MachineIndependent
+INCLUDE_DIRS += $(HLSL2GLSL_ROOT)/GLSLCodeGen
+INCLUDE_DIRS += $(HLSL2GLSL_ROOT)/OSDependent/Emscripten
 
-SOURCES += external/minizip/ioapi.c
-SOURCES += external/minizip/ioapi_buf.c
-SOURCES += external/minizip/ioapi_mem.c
-SOURCES += external/minizip/unzip.c
-SOURCES += external/minizip/zip.c
+
+# MINIZIP
+MINIZIP_ROOT := external/minizip
+SOURCES += $(MINIZIP_ROOT)/ioapi.c
+SOURCES += $(MINIZIP_ROOT)/ioapi_buf.c
+SOURCES += $(MINIZIP_ROOT)/ioapi_mem.c
+SOURCES += $(MINIZIP_ROOT)/unzip.c
+SOURCES += $(MINIZIP_ROOT)/zip.c
+
+# LZMA
 
 LZMA_SOURCE_DIR = external/lzma1801/C
 LZMA_SOURCE += ${LZMA_SOURCE_DIR}/Lzma2Dec.c ${LZMA_SOURCE_DIR}/Ppmd7Dec.c ${LZMA_SOURCE_DIR}/Aes.c
@@ -66,24 +79,18 @@ LZMA_SOURCE += ${LZMA_SOURCE_DIR}/7zCrc.c ${LZMA_SOURCE_DIR}/AesOpt.c ${LZMA_SOU
 LZMA_SOURCE += ${LZMA_SOURCE_DIR}/7zCrcOpt.c ${LZMA_SOURCE_DIR}/7zBuf.c
 SOURCES += ${LZMA_SOURCE}
 
-INCLUDE_DIRS += external/imgui
 
 
 SOURCES_JS = $(shell find src -name '*.js')
 
 
-INCLUDE_DIRS += $(HLSL2GLSL_ROOT)
-INCLUDE_DIRS += $(HLSL2GLSL_ROOT)/hlslang
-INCLUDE_DIRS += $(HLSL2GLSL_ROOT)/Include
-INCLUDE_DIRS += $(HLSL2GLSL_ROOT)/MachineIndependent
-INCLUDE_DIRS += $(HLSL2GLSL_ROOT)/GLSLCodeGen
-INCLUDE_DIRS += $(HLSL2GLSL_ROOT)/OSDependent/Emscripten
 
 
 OBJS       := $(SOURCES:%=$(BUILD_DIR)/%.o)
 DEPS       := $(SOURCES:%=$(BUILD_DIR)/%.d)
 #DATA_FILES := $(shell find assets)
-SHELL_HTML ?= app/emscripten/emscripten_shell.html
+#SHELL_HTML ?= app/emscripten/emscripten_shell.html
+SHELL_HTML ?= app/emscripten/shell_minimal.html
 
 
 #
@@ -109,7 +116,6 @@ endif
 
 CC_FLAGS += -DBUILD_CONFIG=$(CONFIG)
 CC_FLAGS += -Wno-deprecated-register
-CC_FLAGS += -s USE_SDL=2
 CC_FLAGS += -s USE_ZLIB
 
 
@@ -129,11 +135,14 @@ endif
 LD_FLAGS += -s WASM=1
 LD_FLAGS += -s ASSERTIONS=1
 LD_FLAGS += -s USE_WEBGL2=1
+LD_FLAGS += -s USE_SDL=2
 #LD_FLAGS += -s "BINARYEN_TRAP_MODE='clamp'"
 LD_FLAGS += -mnontrapping-fptoint
 
+LD_FLAGS += -s MIN_WEBGL_VERSION=2
+LD_FLAGS += -s MAX_WEBGL_VERSION=2
+
 # LD_FLAGS += -s FULL_ES3=1
-LD_FLAGS += -s USE_SDL=2
 LD_FLAGS +=  -lopenal
 LD_FLAGS += -s DISABLE_DEPRECATED_FIND_EVENT_TARGET_BEHAVIOR=1
 
@@ -143,11 +152,14 @@ LD_FLAGS += $(addprefix --post-js , $(SOURCES_JS) )
 #
 
 .PHONY: default
-default: $(OUTPUT_HTML)
+default: build
 
 .PHONY: run
-run: $(OUTPUT_HTML)
+run: build
 	$(EMRUN) --serve_after_close --browser $(BROWSER) $(OUTPUT_HTML)
+
+.PHONY: build
+build: $(OUTPUT_HTML)
 
 .PHONY: serve
 serve: $(OUTPUT_HTML)
@@ -161,10 +173,12 @@ test:
 clean:
 	rm -Rf $(BUILD_DIR)
 
-$(OUTPUT_HTML): $(OBJS) $(SHELL_HTML) $(SOURCES_JS) $(MAKEFILE_LIST)
+
+$(OUTPUT_HTML) $(OUTPUT_WASM) $(OUTPUT_DATA): $(OBJS) $(SHELL_HTML) $(SOURCES_JS) $(MAKEFILE_LIST) 
 	@mkdir -p $(@D)
 	@echo Linking $@
 	@$(CC) $(OBJS) -o $@ $(CC_FLAGS) $(LD_FLAGS)
+
 
 $(BUILD_DIR)/%.c.o: %.c
 	@mkdir -p $(@D)
@@ -176,9 +190,16 @@ $(BUILD_DIR)/%.cpp.o: %.cpp
 	@echo Compiling $<
 	@$(CC) -c $< -o $@ -MMD -std=c++14 $(CC_FLAGS) $(INCLUDE_DIRS:%=-I%)
 
+$(OUTPUT_DIR): $(OUTPUT_HTML) $(OUTPUT_WASM) $(OUTPUT_DATA) $(WEBROOT_SOURCES)
+	@mkdir -p $@
+	cp -av $(WEBROOT_SOURCES) $@
+	touch $@
+
+
 .PHONY: deploy
-deploy:
+deploy: build
 	aws s3 cp $(OUTPUT_DIR)  $(S3_BUCKET_URL) --recursive
+
 
 
 -include $(DEPS)

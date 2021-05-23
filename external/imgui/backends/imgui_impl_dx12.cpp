@@ -3,13 +3,11 @@
 
 // Implemented features:
 //  [X] Renderer: User texture binding. Use 'D3D12_GPU_DESCRIPTOR_HANDLE' as ImTextureID. Read the FAQ about ImTextureID!
-//  [X] Renderer: Multi-viewport support. Enable with 'io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable'.
-//      FIXME: The transition from removing a viewport and moving the window in an existing hosted viewport tends to flicker.
 //  [X] Renderer: Support for large meshes (64k+ vertices) with 16-bit indices.
 
 // Important: to compile on 32-bit systems, this backend requires code to be compiled with '#define ImTextureID ImU64'.
 // This is because we need ImTextureID to carry a 64-bit value and by default ImTextureID is defined as void*.
-// This define is done in the example .vcxproj file and need to be replicated in your app (by e.g. editing imconfig.h)
+// This define is set in the example .vcxproj file and need to be replicated in your app or by adding it to your imconfig.h file.
 
 // You can copy and use unmodified imgui_impl_* files in your project. See examples/ folder for examples of using this.
 // If you are new to Dear ImGui, read documentation from the docs/ folder + read the top of imgui.cpp.
@@ -17,7 +15,9 @@
 
 // CHANGELOG
 // (minor and older changes stripped away, please see git history for details)
-//  2020-XX-XX: Platform: Added support for multiple windows via the ImGuiPlatformIO interface.
+//  2021-05-19: DirectX12: Replaced direct access to ImDrawCmd::TextureId with a call to ImDrawCmd::GetTexID(). (will become a requirement)
+//  2021-02-18: DirectX12: Change blending equation to preserve alpha in output buffer.
+//  2021-01-11: DirectX12: Improve Windows 7 compatibility (for D3D12On7) by loading d3d12.dll dynamically.
 //  2020-09-16: DirectX12: Avoid rendering calls with zero-sized scissor rectangle since it generates a validation layer warning.
 //  2020-09-08: DirectX12: Clarified support for building on 32-bit systems by redefining ImTextureID.
 //  2019-10-18: DirectX12: *BREAKING CHANGE* Added extra ID3D12DescriptorHeap parameter to ImGui_ImplDX12_Init() function.
@@ -50,88 +50,17 @@ static DXGI_FORMAT                  g_RTVFormat = DXGI_FORMAT_UNKNOWN;
 static ID3D12Resource*              g_pFontTextureResource = NULL;
 static D3D12_CPU_DESCRIPTOR_HANDLE  g_hFontSrvCpuDescHandle = {};
 static D3D12_GPU_DESCRIPTOR_HANDLE  g_hFontSrvGpuDescHandle = {};
-static ID3D12DescriptorHeap*        g_pd3dSrvDescHeap = NULL;
-static UINT                         g_numFramesInFlight = 0;
 
-// Buffers used during the rendering of a frame
-struct ImGui_ImplDX12_RenderBuffers
+struct FrameResources
 {
     ID3D12Resource*     IndexBuffer;
     ID3D12Resource*     VertexBuffer;
     int                 IndexBufferSize;
     int                 VertexBufferSize;
 };
-
-// Buffers used for secondary viewports created by the multi-viewports systems
-struct ImGui_ImplDX12_FrameContext
-{
-    ID3D12CommandAllocator*         CommandAllocator;
-    ID3D12Resource*                 RenderTarget;
-    D3D12_CPU_DESCRIPTOR_HANDLE     RenderTargetCpuDescriptors;
-};
-
-// Helper structure we store in the void* RendererUserData field of each ImGuiViewport to easily retrieve our backend data.
-// Main viewport created by application will only use the Resources field.
-// Secondary viewports created by this backend will use all the fields (including Window fields),
-struct ImGuiViewportDataDx12
-{
-    // Window
-    ID3D12CommandQueue*             CommandQueue;
-    ID3D12GraphicsCommandList*      CommandList;
-    ID3D12DescriptorHeap*           RtvDescHeap;
-    IDXGISwapChain3*                SwapChain;
-    ID3D12Fence*                    Fence;
-    UINT64                          FenceSignaledValue;
-    HANDLE                          FenceEvent;
-    ImGui_ImplDX12_FrameContext*    FrameCtx;
-
-    // Render buffers
-    UINT                            FrameIndex;
-    ImGui_ImplDX12_RenderBuffers*   FrameRenderBuffers;
-
-    ImGuiViewportDataDx12()
-    {
-        CommandQueue = NULL;
-        CommandList = NULL;
-        RtvDescHeap = NULL;
-        SwapChain = NULL;
-        Fence = NULL;
-        FenceSignaledValue = 0;
-        FenceEvent = NULL;
-        FrameCtx = new ImGui_ImplDX12_FrameContext[g_numFramesInFlight];
-        FrameIndex = UINT_MAX;
-        FrameRenderBuffers = new ImGui_ImplDX12_RenderBuffers[g_numFramesInFlight];
-
-        for (UINT i = 0; i < g_numFramesInFlight; ++i)
-        {
-            FrameCtx[i].CommandAllocator = NULL;
-            FrameCtx[i].RenderTarget = NULL;
-
-            // Create buffers with a default size (they will later be grown as needed)
-            FrameRenderBuffers[i].IndexBuffer = NULL;
-            FrameRenderBuffers[i].VertexBuffer = NULL;
-            FrameRenderBuffers[i].VertexBufferSize = 5000;
-            FrameRenderBuffers[i].IndexBufferSize = 10000;
-        }
-    }
-    ~ImGuiViewportDataDx12()
-    {
-        IM_ASSERT(CommandQueue == NULL && CommandList == NULL);
-        IM_ASSERT(RtvDescHeap == NULL);
-        IM_ASSERT(SwapChain == NULL);
-        IM_ASSERT(Fence == NULL);
-        IM_ASSERT(FenceEvent == NULL);
-
-        for (UINT i = 0; i < g_numFramesInFlight; ++i)
-        {
-            IM_ASSERT(FrameCtx[i].CommandAllocator == NULL && FrameCtx[i].RenderTarget == NULL);
-            IM_ASSERT(FrameRenderBuffers[i].IndexBuffer == NULL && FrameRenderBuffers[i].VertexBuffer == NULL);
-        }
-
-        delete[] FrameCtx; FrameCtx = NULL;
-        delete[] FrameRenderBuffers; FrameRenderBuffers = NULL;
-    }
-};
+static FrameResources*  g_pFrameResources = NULL;
+static UINT             g_numFramesInFlight = 0;
+static UINT             g_frameIndex = UINT_MAX;
 
 template<typename T>
 static void SafeRelease(T*& res)
@@ -141,23 +70,12 @@ static void SafeRelease(T*& res)
     res = NULL;
 }
 
-static void ImGui_ImplDX12_DestroyRenderBuffers(ImGui_ImplDX12_RenderBuffers* render_buffers)
-{
-    SafeRelease(render_buffers->IndexBuffer);
-    SafeRelease(render_buffers->VertexBuffer);
-    render_buffers->IndexBufferSize = render_buffers->VertexBufferSize = 0;
-}
-
 struct VERTEX_CONSTANT_BUFFER
 {
     float   mvp[4][4];
 };
 
-// Forward Declarations
-static void ImGui_ImplDX12_InitPlatformInterface();
-static void ImGui_ImplDX12_ShutdownPlatformInterface();
-
-static void ImGui_ImplDX12_SetupRenderState(ImDrawData* draw_data, ID3D12GraphicsCommandList* ctx, ImGui_ImplDX12_RenderBuffers* fr)
+static void ImGui_ImplDX12_SetupRenderState(ImDrawData* draw_data, ID3D12GraphicsCommandList* ctx, FrameResources* fr)
 {
     // Setup orthographic projection matrix into our constant buffer
     // Our visible imgui space lies from draw_data->DisplayPos (top left) to draw_data->DisplayPos+data_data->DisplaySize (bottom right).
@@ -219,9 +137,10 @@ void ImGui_ImplDX12_RenderDrawData(ImDrawData* draw_data, ID3D12GraphicsCommandL
     if (draw_data->DisplaySize.x <= 0.0f || draw_data->DisplaySize.y <= 0.0f)
         return;
 
-    ImGuiViewportDataDx12* render_data = (ImGuiViewportDataDx12*)draw_data->OwnerViewport->RendererUserData;
-    render_data->FrameIndex++;
-    ImGui_ImplDX12_RenderBuffers* fr = &render_data->FrameRenderBuffers[render_data->FrameIndex % g_numFramesInFlight];
+    // FIXME: I'm assuming that this only gets called once per frame!
+    // If not, we can't just re-allocate the IB or VB, we'll have to do a proper allocator.
+    g_frameIndex = g_frameIndex + 1;
+    FrameResources* fr = &g_pFrameResources[g_frameIndex % g_numFramesInFlight];
 
     // Create and grow vertex/index buffers if needed
     if (fr->VertexBuffer == NULL || fr->VertexBufferSize < draw_data->TotalVtxCount)
@@ -321,7 +240,9 @@ void ImGui_ImplDX12_RenderDrawData(ImDrawData* draw_data, ID3D12GraphicsCommandL
                 const D3D12_RECT r = { (LONG)(pcmd->ClipRect.x - clip_off.x), (LONG)(pcmd->ClipRect.y - clip_off.y), (LONG)(pcmd->ClipRect.z - clip_off.x), (LONG)(pcmd->ClipRect.w - clip_off.y) };
                 if (r.right > r.left && r.bottom > r.top)
                 {
-                    ctx->SetGraphicsRootDescriptorTable(1, *(D3D12_GPU_DESCRIPTOR_HANDLE*)&pcmd->TextureId);
+                    D3D12_GPU_DESCRIPTOR_HANDLE texture_handle = {};
+                    texture_handle.ptr = (UINT64)(intptr_t)pcmd->GetTexID();
+                    ctx->SetGraphicsRootDescriptorTable(1, texture_handle);
                     ctx->RSSetScissorRects(1, &r);
                     ctx->DrawIndexedInstanced(pcmd->ElemCount, 1, pcmd->IdxOffset + global_idx_offset, pcmd->VtxOffset + global_vtx_offset, 0);
                 }
@@ -478,7 +399,7 @@ static void ImGui_ImplDX12_CreateFontsTexture()
 
     // Store our identifier
     static_assert(sizeof(ImTextureID) >= sizeof(g_hFontSrvGpuDescHandle.ptr), "Can't pack descriptor handle into TexID, 32-bit not supported yet.");
-    io.Fonts->TexID = (ImTextureID)g_hFontSrvGpuDescHandle.ptr;
+    io.Fonts->SetTexID((ImTextureID)g_hFontSrvGpuDescHandle.ptr);
 }
 
 bool    ImGui_ImplDX12_CreateDeviceObjects()
@@ -536,8 +457,34 @@ bool    ImGui_ImplDX12_CreateDeviceObjects()
             D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
             D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
+        // Load d3d12.dll and D3D12SerializeRootSignature() function address dynamically to facilitate using with D3D12On7.
+        // See if any version of d3d12.dll is already loaded in the process. If so, give preference to that.
+        static HINSTANCE d3d12_dll = ::GetModuleHandleA("d3d12.dll");
+        if (d3d12_dll == NULL)
+        {
+            // Attempt to load d3d12.dll from local directories. This will only succeed if
+            // (1) the current OS is Windows 7, and
+            // (2) there exists a version of d3d12.dll for Windows 7 (D3D12On7) in one of the following directories.
+            // See https://github.com/ocornut/imgui/pull/3696 for details.
+            const char* localD3d12Paths[] = { ".\\d3d12.dll", ".\\d3d12on7\\d3d12.dll", ".\\12on7\\d3d12.dll" }; // A. current directory, B. used by some games, C. used in Microsoft D3D12On7 sample
+            for (int i = 0; i < IM_ARRAYSIZE(localD3d12Paths); i++)
+                if ((d3d12_dll = ::LoadLibraryA(localD3d12Paths[i])) != NULL)
+                    break;
+
+            // If failed, we are on Windows >= 10.
+            if (d3d12_dll == NULL)
+                d3d12_dll = ::LoadLibraryA("d3d12.dll");
+
+            if (d3d12_dll == NULL)
+                return false;
+        }
+
+        PFN_D3D12_SERIALIZE_ROOT_SIGNATURE D3D12SerializeRootSignatureFn = (PFN_D3D12_SERIALIZE_ROOT_SIGNATURE)::GetProcAddress(d3d12_dll, "D3D12SerializeRootSignature");
+        if (D3D12SerializeRootSignatureFn == NULL)
+            return false;
+
         ID3DBlob* blob = NULL;
-        if (D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, NULL) != S_OK)
+        if (D3D12SerializeRootSignatureFn(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, NULL) != S_OK)
             return false;
 
         g_pd3dDevice->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&g_pRootSignature));
@@ -642,8 +589,8 @@ bool    ImGui_ImplDX12_CreateDeviceObjects()
         desc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
         desc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
         desc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-        desc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
-        desc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+        desc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+        desc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
         desc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
         desc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     }
@@ -697,7 +644,14 @@ void    ImGui_ImplDX12_InvalidateDeviceObjects()
     SafeRelease(g_pFontTextureResource);
 
     ImGuiIO& io = ImGui::GetIO();
-    io.Fonts->TexID = NULL; // We copied g_pFontTextureView to io.Fonts->TexID so let's clear that as well.
+    io.Fonts->SetTexID(NULL); // We copied g_pFontTextureView to io.Fonts->TexID so let's clear that as well.
+
+    for (UINT i = 0; i < g_numFramesInFlight; i++)
+    {
+        FrameResources* fr = &g_pFrameResources[i];
+        SafeRelease(fr->IndexBuffer);
+        SafeRelease(fr->VertexBuffer);
+    }
 }
 
 bool ImGui_ImplDX12_Init(ID3D12Device* device, int num_frames_in_flight, DXGI_FORMAT rtv_format, ID3D12DescriptorHeap* cbv_srv_heap,
@@ -707,290 +661,43 @@ bool ImGui_ImplDX12_Init(ID3D12Device* device, int num_frames_in_flight, DXGI_FO
     ImGuiIO& io = ImGui::GetIO();
     io.BackendRendererName = "imgui_impl_dx12";
     io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;  // We can honor the ImDrawCmd::VtxOffset field, allowing for large meshes.
-    io.BackendFlags |= ImGuiBackendFlags_RendererHasViewports;  // We can create multi-viewports on the Renderer side (optional) // FIXME-VIEWPORT: Actually unfinished..
 
     g_pd3dDevice = device;
     g_RTVFormat = rtv_format;
     g_hFontSrvCpuDescHandle = font_srv_cpu_desc_handle;
     g_hFontSrvGpuDescHandle = font_srv_gpu_desc_handle;
+    g_pFrameResources = new FrameResources[num_frames_in_flight];
     g_numFramesInFlight = num_frames_in_flight;
-    g_pd3dSrvDescHeap = cbv_srv_heap;
+    g_frameIndex = UINT_MAX;
+    IM_UNUSED(cbv_srv_heap); // Unused in master branch (will be used by multi-viewports)
 
-    // Create a dummy ImGuiViewportDataDx12 holder for the main viewport,
-    // Since this is created and managed by the application, we will only use the ->Resources[] fields.
-    ImGuiViewport* main_viewport = ImGui::GetMainViewport();
-    main_viewport->RendererUserData = IM_NEW(ImGuiViewportDataDx12)();
-
-    // Setup backend capabilities flags
-    io.BackendFlags |= ImGuiBackendFlags_RendererHasViewports;    // We can create multi-viewports on the Renderer side (optional)
-    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-        ImGui_ImplDX12_InitPlatformInterface();
+    // Create buffers with a default size (they will later be grown as needed)
+    for (int i = 0; i < num_frames_in_flight; i++)
+    {
+        FrameResources* fr = &g_pFrameResources[i];
+        fr->IndexBuffer = NULL;
+        fr->VertexBuffer = NULL;
+        fr->IndexBufferSize = 10000;
+        fr->VertexBufferSize = 5000;
+    }
 
     return true;
 }
 
 void ImGui_ImplDX12_Shutdown()
 {
-    // Manually delete main viewport render resources in-case we haven't initialized for viewports
-    ImGuiViewport* main_viewport = ImGui::GetMainViewport();
-    if (ImGuiViewportDataDx12* data = (ImGuiViewportDataDx12*)main_viewport->RendererUserData)
-    {
-        // We could just call ImGui_ImplDX12_DestroyWindow(main_viewport) as a convenience but that would be misleading since we only use data->Resources[]
-        for (UINT i = 0; i < g_numFramesInFlight; i++)
-            ImGui_ImplDX12_DestroyRenderBuffers(&data->FrameRenderBuffers[i]);
-        IM_DELETE(data);
-        main_viewport->RendererUserData = NULL;
-    }
-
-    // Clean up windows and device objects
-    ImGui_ImplDX12_ShutdownPlatformInterface();
     ImGui_ImplDX12_InvalidateDeviceObjects();
-
+    delete[] g_pFrameResources;
+    g_pFrameResources = NULL;
     g_pd3dDevice = NULL;
     g_hFontSrvCpuDescHandle.ptr = 0;
     g_hFontSrvGpuDescHandle.ptr = 0;
     g_numFramesInFlight = 0;
-    g_pd3dSrvDescHeap = NULL;
+    g_frameIndex = UINT_MAX;
 }
 
 void ImGui_ImplDX12_NewFrame()
 {
     if (!g_pPipelineState)
         ImGui_ImplDX12_CreateDeviceObjects();
-}
-
-//--------------------------------------------------------------------------------------------------------
-// MULTI-VIEWPORT / PLATFORM INTERFACE SUPPORT
-// This is an _advanced_ and _optional_ feature, allowing the backend to create and handle multiple viewports simultaneously.
-// If you are new to dear imgui or creating a new binding for dear imgui, it is recommended that you completely ignore this section first..
-//--------------------------------------------------------------------------------------------------------
-
-static void ImGui_ImplDX12_CreateWindow(ImGuiViewport* viewport)
-{
-    ImGuiViewportDataDx12* data = IM_NEW(ImGuiViewportDataDx12)();
-    viewport->RendererUserData = data;
-
-    // PlatformHandleRaw should always be a HWND, whereas PlatformHandle might be a higher-level handle (e.g. GLFWWindow*, SDL_Window*).
-    // Some backends will leave PlatformHandleRaw NULL, in which case we assume PlatformHandle will contain the HWND.
-    HWND hwnd = viewport->PlatformHandleRaw ? (HWND)viewport->PlatformHandleRaw : (HWND)viewport->PlatformHandle;
-    IM_ASSERT(hwnd != 0);
-
-    data->FrameIndex = UINT_MAX;
-
-    // Create command queue.
-    D3D12_COMMAND_QUEUE_DESC queue_desc = {};
-    queue_desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-    queue_desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-
-    HRESULT res = S_OK;
-    res = g_pd3dDevice->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&data->CommandQueue));
-    IM_ASSERT(res == S_OK);
-
-    // Create command allocator.
-    for (UINT i = 0; i < g_numFramesInFlight; ++i)
-    {
-        res = g_pd3dDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&data->FrameCtx[i].CommandAllocator));
-        IM_ASSERT(res == S_OK);
-    }
-
-    // Create command list.
-    res = g_pd3dDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, data->FrameCtx[0].CommandAllocator, NULL, IID_PPV_ARGS(&data->CommandList));
-    IM_ASSERT(res == S_OK);
-    data->CommandList->Close();
-
-    // Create fence.
-    res = g_pd3dDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&data->Fence));
-    IM_ASSERT(res == S_OK);
-
-    data->FenceEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-    IM_ASSERT(data->FenceEvent != NULL);
-
-    // Create swap chain
-    // FIXME-VIEWPORT: May want to copy/inherit swap chain settings from the user/application.
-    DXGI_SWAP_CHAIN_DESC1 sd1;
-    ZeroMemory(&sd1, sizeof(sd1));
-    sd1.BufferCount = g_numFramesInFlight;
-    sd1.Width = (UINT)viewport->Size.x;
-    sd1.Height = (UINT)viewport->Size.y;
-    sd1.Format = g_RTVFormat;
-    sd1.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    sd1.SampleDesc.Count = 1;
-    sd1.SampleDesc.Quality = 0;
-    sd1.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-    sd1.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
-    sd1.Scaling = DXGI_SCALING_STRETCH;
-    sd1.Stereo = FALSE;
-
-    IDXGIFactory4* dxgi_factory = NULL;
-    res = ::CreateDXGIFactory1(IID_PPV_ARGS(&dxgi_factory));
-    IM_ASSERT(res == S_OK);
-
-    IDXGISwapChain1* swap_chain = NULL;
-    res = dxgi_factory->CreateSwapChainForHwnd(data->CommandQueue, hwnd, &sd1, NULL, NULL, &swap_chain);
-    IM_ASSERT(res == S_OK);
-
-    dxgi_factory->Release();
-
-    // Or swapChain.As(&mSwapChain)
-    IM_ASSERT(data->SwapChain == NULL);
-    swap_chain->QueryInterface(IID_PPV_ARGS(&data->SwapChain));
-    swap_chain->Release();
-
-    // Create the render targets
-    if (data->SwapChain)
-    {
-        D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-        desc.NumDescriptors = g_numFramesInFlight;
-        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-        desc.NodeMask = 1;
-
-        HRESULT hr = g_pd3dDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&data->RtvDescHeap));
-        IM_ASSERT(hr == S_OK);
-
-        SIZE_T rtv_descriptor_size = g_pd3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-        D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle = data->RtvDescHeap->GetCPUDescriptorHandleForHeapStart();
-        for (UINT i = 0; i < g_numFramesInFlight; i++)
-        {
-            data->FrameCtx[i].RenderTargetCpuDescriptors = rtv_handle;
-            rtv_handle.ptr += rtv_descriptor_size;
-        }
-
-        ID3D12Resource* back_buffer;
-        for (UINT i = 0; i < g_numFramesInFlight; i++)
-        {
-            IM_ASSERT(data->FrameCtx[i].RenderTarget == NULL);
-            data->SwapChain->GetBuffer(i, IID_PPV_ARGS(&back_buffer));
-            g_pd3dDevice->CreateRenderTargetView(back_buffer, NULL, data->FrameCtx[i].RenderTargetCpuDescriptors);
-            data->FrameCtx[i].RenderTarget = back_buffer;
-        }
-    }
-
-    for (UINT i = 0; i < g_numFramesInFlight; i++)
-        ImGui_ImplDX12_DestroyRenderBuffers(&data->FrameRenderBuffers[i]);
-}
-
-static void ImGui_WaitForPendingOperations(ImGuiViewportDataDx12* data)
-{
-    HRESULT hr = S_FALSE;
-    if (data && data->CommandQueue && data->Fence && data->FenceEvent)
-    {
-        hr = data->CommandQueue->Signal(data->Fence, ++data->FenceSignaledValue);
-        IM_ASSERT(hr == S_OK);
-        ::WaitForSingleObject(data->FenceEvent, 0); // Reset any forgotten waits
-        hr = data->Fence->SetEventOnCompletion(data->FenceSignaledValue, data->FenceEvent);
-        IM_ASSERT(hr == S_OK);
-        ::WaitForSingleObject(data->FenceEvent, INFINITE);
-    }
-}
-
-static void ImGui_ImplDX12_DestroyWindow(ImGuiViewport* viewport)
-{
-    // The main viewport (owned by the application) will always have RendererUserData == NULL since we didn't create the data for it.
-    if (ImGuiViewportDataDx12* data = (ImGuiViewportDataDx12*)viewport->RendererUserData)
-    {
-        ImGui_WaitForPendingOperations(data);
-
-        SafeRelease(data->CommandQueue);
-        SafeRelease(data->CommandList);
-        SafeRelease(data->SwapChain);
-        SafeRelease(data->RtvDescHeap);
-        SafeRelease(data->Fence);
-        ::CloseHandle(data->FenceEvent);
-        data->FenceEvent = NULL;
-
-        for (UINT i = 0; i < g_numFramesInFlight; i++)
-        {
-            SafeRelease(data->FrameCtx[i].RenderTarget);
-            SafeRelease(data->FrameCtx[i].CommandAllocator);
-            ImGui_ImplDX12_DestroyRenderBuffers(&data->FrameRenderBuffers[i]);
-        }
-        IM_DELETE(data);
-    }
-    viewport->RendererUserData = NULL;
-}
-
-static void ImGui_ImplDX12_SetWindowSize(ImGuiViewport* viewport, ImVec2 size)
-{
-    ImGuiViewportDataDx12* data = (ImGuiViewportDataDx12*)viewport->RendererUserData;
-
-    ImGui_WaitForPendingOperations(data);
-
-    for (UINT i = 0; i < g_numFramesInFlight; i++)
-        SafeRelease(data->FrameCtx[i].RenderTarget);
-
-    if (data->SwapChain)
-    {
-        ID3D12Resource* back_buffer = NULL;
-        data->SwapChain->ResizeBuffers(0, (UINT)size.x, (UINT)size.y, DXGI_FORMAT_UNKNOWN, 0);
-        for (UINT i = 0; i < g_numFramesInFlight; i++)
-        {
-            data->SwapChain->GetBuffer(i, IID_PPV_ARGS(&back_buffer));
-            g_pd3dDevice->CreateRenderTargetView(back_buffer, NULL, data->FrameCtx[i].RenderTargetCpuDescriptors);
-            data->FrameCtx[i].RenderTarget = back_buffer;
-        }
-    }
-}
-
-static void ImGui_ImplDX12_RenderWindow(ImGuiViewport* viewport, void*)
-{
-    ImGuiViewportDataDx12* data = (ImGuiViewportDataDx12*)viewport->RendererUserData;
-
-    ImGui_ImplDX12_FrameContext* frame_context = &data->FrameCtx[data->FrameIndex % g_numFramesInFlight];
-    UINT back_buffer_idx = data->SwapChain->GetCurrentBackBufferIndex();
-
-    const ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
-    D3D12_RESOURCE_BARRIER barrier = {};
-    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    barrier.Transition.pResource = data->FrameCtx[back_buffer_idx].RenderTarget;
-    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-
-    // Draw
-    ID3D12GraphicsCommandList* cmd_list = data->CommandList;
-
-    frame_context->CommandAllocator->Reset();
-    cmd_list->Reset(frame_context->CommandAllocator, NULL);
-    cmd_list->ResourceBarrier(1, &barrier);
-    cmd_list->OMSetRenderTargets(1, &data->FrameCtx[back_buffer_idx].RenderTargetCpuDescriptors, FALSE, NULL);
-    if (!(viewport->Flags & ImGuiViewportFlags_NoRendererClear))
-        cmd_list->ClearRenderTargetView(data->FrameCtx[back_buffer_idx].RenderTargetCpuDescriptors, (float*)&clear_color, 0, NULL);
-    cmd_list->SetDescriptorHeaps(1, &g_pd3dSrvDescHeap);
-
-    ImGui_ImplDX12_RenderDrawData(viewport->DrawData, cmd_list);
-
-    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-    cmd_list->ResourceBarrier(1, &barrier);
-    cmd_list->Close();
-
-    data->CommandQueue->Wait(data->Fence, data->FenceSignaledValue);
-    data->CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&cmd_list);
-    data->CommandQueue->Signal(data->Fence, ++data->FenceSignaledValue);
-}
-
-static void ImGui_ImplDX12_SwapBuffers(ImGuiViewport* viewport, void*)
-{
-    ImGuiViewportDataDx12* data = (ImGuiViewportDataDx12*)viewport->RendererUserData;
-
-    data->SwapChain->Present(0, 0);
-    while (data->Fence->GetCompletedValue() < data->FenceSignaledValue)
-        ::SwitchToThread();
-}
-
-void ImGui_ImplDX12_InitPlatformInterface()
-{
-    ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
-    platform_io.Renderer_CreateWindow = ImGui_ImplDX12_CreateWindow;
-    platform_io.Renderer_DestroyWindow = ImGui_ImplDX12_DestroyWindow;
-    platform_io.Renderer_SetWindowSize = ImGui_ImplDX12_SetWindowSize;
-    platform_io.Renderer_RenderWindow = ImGui_ImplDX12_RenderWindow;
-    platform_io.Renderer_SwapBuffers = ImGui_ImplDX12_SwapBuffers;
-}
-
-void ImGui_ImplDX12_ShutdownPlatformInterface()
-{
-    ImGui::DestroyPlatformWindows();
 }

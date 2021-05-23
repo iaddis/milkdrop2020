@@ -504,9 +504,9 @@ extern float AdjustRateToFPS(float per_frame_decay_rate_at_fps1, float fps1, flo
 
 
 // glue factory
-IVisualizerPtr CreateVisualizer(ContextPtr context, IAudioAnalyzerPtr audio, ITextureSetPtr texture_map, std::string pluginDir)
+IVisualizerPtr CreateVisualizer(ContextPtr context, ITextureSetPtr texture_map, std::string pluginDir)
 {
-    std::shared_ptr<CPlugin> plugin = std::make_shared<CPlugin>(context, audio, texture_map, pluginDir );
+    std::shared_ptr<CPlugin> plugin = std::make_shared<CPlugin>(context, texture_map, pluginDir );
 	if (!plugin->PluginInitialize())
 	{
 		return nullptr;
@@ -535,12 +535,14 @@ std::string CPlugin::LoadShaderCode(const char* szBaseFilename)
 
 //----------------------------------------------------------------------
 
-CPlugin::CPlugin(ContextPtr context, IAudioAnalyzerPtr audio, ITextureSetPtr texture_map, std::string assetDir)
-	:m_context(context), m_audio(audio), m_texture_map(texture_map), m_drawbuffer(render::CreateDrawBuffer(context))
+CPlugin::CPlugin(ContextPtr context, ITextureSetPtr texture_map, std::string assetDir)
+	:m_context(context), m_texture_map(texture_map), m_drawbuffer(render::CreateDrawBuffer(context))
 {
 	m_frame = 0;
 	m_time = 0;
 	m_fps = 60;
+    
+    m_audio = CreateAudioAnalyzer();
 
 	// Initialize EVERY data member you've added to CPlugin here;
 	//   these will be the default values.
@@ -576,9 +578,9 @@ CPlugin::CPlugin(ContextPtr context, IAudioAnalyzerPtr audio, ITextureSetPtr tex
 	m_NextPresetDuration = 0.0f;
 	m_fSnapPoint = 0.5f;
 
-    m_pState    = std::make_shared<CState>(this);
-	m_pOldState = std::make_shared<CState>(this);
-	
+    // load empty presets
+    LoadEmptyPreset();
+    LoadEmptyPreset();
 
 	m_verts.clear();
 	m_vertinfo.clear();
@@ -591,9 +593,6 @@ CPlugin::CPlugin(ContextPtr context, IAudioAnalyzerPtr audio, ITextureSetPtr tex
 
 CPlugin::~CPlugin()
 {
-    if (m_presetLoadFuture.valid())
-        m_presetLoadFuture.wait();
-
 	ReleaseResources();
 }
 
@@ -703,9 +702,6 @@ void CPlugin::SetOutputSize(Size2D size)
 void CPlugin::AllocateOutputTexture()
 {
     m_outputTexture = m_context->CreateRenderTarget("output", m_nTexSizeX, m_nTexSizeY, m_OutputFormat );
-
-    m_screenshotTexture = m_context->CreateRenderTarget("screenshot", 512, 512, m_FormatRGBA8 );
-
     
     m_lpVS[0] = m_context->CreateRenderTarget("VS1", m_nTexSizeX, m_nTexSizeY, m_InternalFormat);
     assert(m_lpVS[0]);
@@ -1045,11 +1041,6 @@ bool CPlugin::AllocateResources()
     m_shader_blur1 = LoadShaderFromFile("blur1.fx");
     m_shader_blur2 = LoadShaderFromFile("blur2.fx");
 
-    
-	m_pState->Default();
-	m_pOldState->Default();
-
-
 	// GENERATED TEXTURES FOR SHADERS
 	//-------------------------------------
 	{
@@ -1070,9 +1061,6 @@ bool CPlugin::AllocateResources()
     
     Randomize();
 
-    CheckResize( m_context->GetDisplaySize() );
-
-    
 	return true;
 }
 
@@ -1614,6 +1602,8 @@ ShaderInfoPtr       CPlugin::RecompileShader(const std::string &name, const std:
     
     PROFILE_FUNCTION_CAT("load")
 
+    
+//    LogPrint("RecompileShader %s\n", name.c_str());
 
     
     StopWatch sw;
@@ -1978,12 +1968,30 @@ TexturePtr CPlugin::GetOutputTexture()
     return m_outputTexture;
 }
 
-
-TexturePtr CPlugin::GetScreenshotTexture()
+void CPlugin::DrawAudioUI()
 {
-    return m_screenshotTexture;
-}
+    //        TableNameValue("SampleRate", "%.fhz", m_audioSource->GetSampleRate());
+    ImGui::TableNextRow();
+    ImGui::TableNextColumn();
+    ImGui::Text("BlockSize");
+    ImGui::TableNextColumn();
+    ImGui::Text("%d samples\n",  m_audio->GetBlockSize() );
+    ImGui::TableNextColumn();
 
+    const char *channels[] = {"Left", "Right", nullptr};
+    for (int i=0; channels[i]; i++)
+    {
+
+        ImGui::Separator();
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::Text("%s", channels[i]);
+        ImGui::TableNextColumn();
+        m_audio->DrawChannelUI(i);
+        ImGui::TableNextColumn();
+    }
+}
 
 void CPlugin::DrawDebugUI()
 {
@@ -2279,11 +2287,17 @@ bool CPlugin::PluginInitialize()
 //----------------------------------------------------------------------
 
 
-void CPlugin::Render(float dt)
+void CPlugin::Render(float dt, Size2D output_size, IAudioSourcePtr audioSource)
 {
+    SetOutputSize(output_size);
+    
+    audioSource->ReadAudioFrame(dt, m_samples);
+    m_audio->Update(dt, m_samples);
+//    m_samples.Modulate(m_audioGain);
+
+
 	m_fps = 1.0f / dt;
     
-//    CheckPresetLoad();
     
     RenderFrame();  // see milkdropfs.cpp
 
@@ -2601,6 +2615,9 @@ PresetPtr CPlugin::LoadPresetFromFile(std::string &presetText, std::string path,
         }
     }
     
+    
+//    LogPrint("LoadingPreset: '%s' (%fms)\n", name.c_str(), sw.GetElapsedMilliSeconds() );
+    
     CStatePtr state = std::make_shared<CState>(this);
     if (!state->ImportFromText(text, name, errors)) {
         // failed to import...
@@ -2653,6 +2670,11 @@ void CPlugin::SetPreset(CStatePtr preset, PresetLoadArgs args)
 {
     PROFILE_FUNCTION()
     
+    if (!preset) {
+        LoadEmptyPreset();
+        return;
+    }
+    
     if (!m_context->IsThreaded())
     {
         std::string errors;
@@ -2676,7 +2698,7 @@ void CPlugin::SetPreset(CStatePtr preset, PresetLoadArgs args)
     m_pOldState = m_pState;
     m_pState = preset;
 
-	if (args.blendTime == 0)
+	if (!m_pOldState || args.blendTime == 0)
 	{
         m_clearTargets = true;
         m_bBlending = false;

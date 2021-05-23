@@ -17,6 +17,7 @@ public:
     
     virtual const std::string &GetDescription() const = 0;
     
+//    virtual double GetSampleRate() const = 0;
     virtual void ReadAudioFrame(float dt, SampleBuffer<Sample> &outSamples) = 0;
     virtual void StopCapture() {}
     

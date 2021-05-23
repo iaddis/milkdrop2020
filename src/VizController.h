@@ -31,6 +31,14 @@ class PresetGroup;
 using PresetGroupPtr = std::shared_ptr<PresetGroup>;
 
 
+enum class PresetRating
+{
+    None,
+    Broken,
+    Blacklist,
+    Favorite
+};
+
 class PresetInfo
 {
 public:
@@ -55,7 +63,8 @@ public:
 
     PresetTestResultPtr  TestResult;        // test result if testing has been completed
     
-    bool            Blacklist = false; 
+    float           Progress = 0.0f;
+    float           Rating = 0.0f;
     int             Index = 0;
     bool            Loaded = false;
     int             DisplayCount = 0;
@@ -78,6 +87,111 @@ public:
 
     std::vector< PresetInfoPtr > Presets;
 };
+
+
+class PresetList
+{
+public:
+    
+    int GetPosition() const {return _position;}
+    
+    void Add(PresetInfoPtr preset)
+    {
+        _list.push_back(preset);
+        _itemAdded = true;
+    }
+
+    PresetInfoPtr SelectIndex(int index)
+    {
+        if (index < 0 || index >= (int)_list.size())
+        {
+            return nullptr;
+        }
+        
+        auto preset =  _list[index];
+        _position = index;
+        return preset;
+    }
+    
+    PresetInfoPtr SelectLast()
+    {
+        return SelectIndex((int)_list.size() - 1);
+    }
+    
+    
+    PresetInfoPtr SelectNext(bool wrap = false)
+    {
+        if (wrap && (_position + 1) >= (int)_list.size()) {
+            return SelectIndex(0);
+        }
+        return SelectIndex(_position + 1);
+    }
+
+    PresetInfoPtr SelectPrevious(bool wrap = false)
+    {
+        if (wrap && (_position <= 0)) {
+            return SelectIndex( (int)_list.size() - 1 );
+        }
+        return SelectIndex(_position - 1);
+    }
+
+    
+    template<typename TRand>
+    PresetInfoPtr SelectRandom(TRand &random_generator)
+    {
+        if (_list.empty())
+            return nullptr;
+        
+        std::uniform_int_distribution<int> dist(0, (int)(_list.size() - 1) ) ;
+        for (int i=0; i < 64; i++)
+        {
+            int preset_index = dist(random_generator);
+            auto preset = SelectIndex(preset_index);
+            if (preset->Rating >= 0)
+            {
+                return preset;
+            }
+        }
+        
+        return nullptr;
+
+    }
+    
+    void Sort()
+    {
+        // sort them by name
+        std::sort(_list.begin(), _list.end(),
+              [](const PresetInfoPtr &a, const PresetInfoPtr &b) -> bool{ return a->SortKey < b->SortKey; }
+          );
+    }
+    
+    void Sort(ImGuiTableSortSpecs *specs);
+
+    void clear()
+    {
+        _list.clear();
+    }
+    
+    bool empty() const {return _list.empty();}
+
+    
+    size_t size() const {return _list.size();}
+    
+    const std::vector< PresetInfoPtr > &List() const
+    {
+        return _list;
+    }
+    
+    bool itemAdded() {return _itemAdded;}
+    void clearItemAdded() {_itemAdded = false;}
+    
+protected:
+    int                            _position = 0;
+    std::vector< PresetInfoPtr > _list;
+    bool _itemAdded = false;
+};
+
+using PresetListPtr = std::shared_ptr<PresetList>;
 
 
 
@@ -108,13 +222,12 @@ public:
 
     virtual PresetGroupPtr AddPresetGroup(std::string name);
 
-    virtual void SelectEmptyPreset();
     virtual bool SelectPreset(const std::string &name);
     
     virtual void SetPreset(PresetInfoPtr presetInfo, PresetPtr preset, PresetLoadArgs args);
     
     virtual bool LoadPreset(PresetInfoPtr presetInfo, PresetLoadArgs args);
-    virtual bool LoadPreset(PresetInfoPtr presetInfo, bool blend, bool addToHistory, bool async);
+    virtual void LoadPreset(PresetInfoPtr presetInfo, bool blend);
     virtual void LoadPresetAsync(PresetInfoPtr presetInfo, PresetLoadArgs args);
 
     void AddToPlaylist();
@@ -122,12 +235,10 @@ public:
     virtual void RenderToScreenshot(PresetInfoPtr preset,  Size2D size, int frameCount);
     virtual render::ImageDataPtr RenderToImageBuffer(PresetInfoPtr preset, Size2D size, int frameCount);
 
-    virtual void CheckDeterminism(PresetInfoPtr preset);
-
 
     virtual void NavigatePrevious();
     virtual void NavigateNext();
-    virtual void NavigateRandom();
+    virtual void NavigateRandom(bool blend = true);
     
     virtual void SingleStep();
     virtual void TogglePause();
@@ -135,11 +246,8 @@ public:
     virtual void ToggleSettingsMenu();
     virtual void ToggleControlsMenu();
 
-    virtual bool OnKeyDown(KeyEvent key);
-    virtual bool OnKeyUp(KeyEvent key);
     virtual void OnDragDrop(std::string path);
 
-    void LoadTexturesFromDir(const char *texturedir, bool recurse);
     void TestAllPresets(std::function<void (std::string name, std::string error)> callback);
     
     
@@ -168,11 +276,12 @@ public:
     void DrawPanel_Presets();
     void DrawPanel_Audio();
     void DrawPanel_Log();
+    void DrawPanel_Screenshots();
 
-    void BlacklistCurrentPreset();
+    void SetCurrentPresetRating(float rating);
+    void ToggleCurrentPresetRating(float rating);
 
 
-    void RenderNextScreenshot();
     void CaptureAllScreenshots(bool overwriteExisting);
     
     virtual void CaptureTestResult(PresetTestResult &result);
@@ -188,9 +297,6 @@ public:
     void TestingDump();
     std::string TestingResultsToString();
     
-    void DrawQuad(render::TexturePtr texture, float x, float y, float w, float h, Color4F c0, Color4F c1);
-    void DrawHDRTest();
-    
 
     void TestServer();
 public:
@@ -200,29 +306,19 @@ public:
 
     std::vector<render::DisplayInfo> m_screens;
 
-    render::TexturePtr          m_screenshotTexture;
+    std::vector<render::TexturePtr>          m_screenshots;
+    int m_screenshotIndex = 0;
 	std::string                 m_assetDir;
     std::string                 m_userDir;
     std::string                 m_settingsPath;
-    std::string                 m_testRunDir;
+    std::string                 m_screenshotDir;
 	PresetInfoPtr               m_currentPreset;
-	std::vector<PresetInfoPtr>	m_presetList;
-    std::vector<PresetInfoPtr>  m_playlist;
-    std::set<PresetInfoPtr>     m_presetBlacklist;
-//    int                         m_playlistPos = 0;
 
+    bool        m_navigateHistory = true;
+    PresetList	m_presetList;
+    PresetList  m_presetListFiltered;
+    PresetList  m_presetHistory;
     
-    
-    struct HistoryEntry
-    {
-        int                 index;
-        double              time;
-        PresetInfoPtr       preset;
-        PresetLoadArgs      args;
-    };
-    
-    std::vector<HistoryEntry>  m_presetHistory;
-    int                        m_presetHistoryPos = 0;
 
     std::map<std::string, PresetInfoPtr>    m_presetLookup;
     
@@ -231,13 +327,11 @@ public:
     std::map<std::string, PresetGroupPtr> m_presetGroupMap;
     
     ImGuiTextFilter     m_presetFilter;
-    std::vector<PresetInfoPtr> m_presetListFiltered;
 
     bool                        m_shouldQuit = false;
     
     bool                        m_selectionLocked = false;
     ContentMode                 m_contentMode = ContentMode::ScaleAspectFill;
-    IAudioAnalyzerPtr           m_audio;
     ITextureSetPtr              m_texture_map;
 	IVisualizerPtr				m_vizualizer;
 
@@ -252,7 +346,7 @@ public:
     float                       m_renderTime = 0.0f;
     float                       m_frameTime = 0.0f;
 	float                       m_time = 0.0f;
-    float                       m_lastProgress = 0.0f;
+    float                       m_maxOutputSize = 2048.0f;
 	bool						m_singleStep = false;
 	bool						m_paused = false;
     bool                        m_showUI  = false;
@@ -276,9 +370,6 @@ public:
     float        m_fTimeBetweenPresets = 15.0f;        // <- this is in addition to m_fBlendTimeAuto
 
     std::mt19937     m_random_generator;
-    
-    render::ShaderPtr m_shader_hdr;
-    render::TexturePtr m_texture_halfwhite;
     
     std::vector<float> m_frameTimes;
     std::vector<float> m_frameTimeHistory;

@@ -346,33 +346,6 @@ void CPlugin::RunPerFrameEquations()
 //    return (size + (align -1)) & ~(align-1);
 //}
 
-void CPlugin::CheckResize(Size2D size)
-{
-//    int w = RoundUp(size.width, 512);
-//    int h = RoundUp(size.height, 512);
-
-    int w = size.width;
-    int h = size.height;
-    
-    int maxSize = 4096;
-//    int maxSize = 2048;
-    if (w >= h)
-    {
-        if (w > maxSize) {
-            h = h * maxSize / w;
-            w = maxSize;
-        }
-    } else
-    {
-        if (h > maxSize) {
-            w = w * maxSize / h;
-            h = maxSize;
-        }
-    }
-    
-    
-    SetOutputSize( Size2D(w, h) );
-}
 
 void CPlugin::TestLineDraw()
 {
@@ -533,13 +506,27 @@ void CPlugin::RenderFrame()
     // flip buffers
     std::swap(m_lpVS[0], m_lpVS[1]);
 
-    // update screenshot
-    m_context->SetRenderTarget(m_screenshotTexture, "Screenshot", LoadAction::Clear);
-	m_context->SetBlendDisable();
-    DrawQuad(m_outputTexture, -1, -1, 2, 2, Color4F(1,1,1,1));
-    m_context->SetRenderTarget(nullptr);
-    
 }
+
+void CPlugin::CaptureScreenshot(render::TexturePtr texture, Vector2 pos, Size2D size)
+{
+    // update screenshot
+    m_context->SetRenderTarget(texture, "Screenshot", LoadAction::Load);
+    m_context->SetBlendDisable();
+ 
+    
+    // setup ortho projections
+    float sw = texture->GetWidth();
+    float sh = texture->GetHeight();
+    
+    Matrix44 m = MatrixOrthoLH(0, sw, sh, 0, 0, 1);
+    m_context->SetTransform(m);
+    
+    
+    DrawQuad(m_outputTexture, pos.x, pos.y, size.width, size.height, Color4F(1,1,1,1));
+    m_context->SetRenderTarget(nullptr);
+}
+
 
 void CPlugin::BlendGrid()
 {

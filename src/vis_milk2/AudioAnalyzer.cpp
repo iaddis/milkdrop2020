@@ -294,21 +294,14 @@ public:
 
     std::string m_description;
     
-    virtual void Update(IAudioSourcePtr source, float dt, float gain) override
+    virtual void Update(float dt, const SampleBuffer<Sample> &samples) override
     {
         PROFILE_FUNCTION();
 
         // get audio data
-        m_samples.SetSampleRate(0);
-        m_samples.clear();
-        if (source)
-        {
-            source->ReadAudioFrame(dt, m_samples);
-            m_description = source->GetDescription();
-        }
-        
-        m_samples.Modulate(gain);
+        m_samples = samples;
 
+        
         m_sampleRate = m_samples.GetSampleRate();
         m_dt = dt;
 

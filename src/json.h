@@ -7,6 +7,8 @@
 #include "../external/rapidjson/include/rapidjson/filewritestream.h"
 #include "../external/rapidjson/include/rapidjson/stringbuffer.h"
 
+#include "../external/rapidjson/include/rapidjson/document.h"
+
 
 
 class JsonWriter
@@ -19,14 +21,16 @@ public:
         
     }
     
-    void Key(const char *str)
+    JsonWriter &Key(const char *str)
     {
         m_writer.Key(str);
+        return *this;
     }
     
-    void Key(const std::string &str)
+    JsonWriter &Key(const std::string &str)
     {
         m_writer.Key(str);
+        return *this;
     }
     
 
@@ -87,64 +91,52 @@ public:
     
     
     
-    JsonWriter &Write(const char *value)
+    JsonWriter &Value(const char *value)
     {
         m_writer.String(value);
         return *this;
     }
 
-    JsonWriter &Write(const std::string &value)
+    JsonWriter &Value(const std::string &value)
     {
         m_writer.String(value);
         return *this;
     }
 
 
-    JsonWriter &Write(int value)
+    JsonWriter &Value(int value)
     {
         m_writer.Int(value);
         return *this;
     }
 
-    JsonWriter &Write(double value)
+    JsonWriter &Value(double value)
     {
         m_writer.Double(value);
         return *this;
     }
 
 
-    JsonWriter &Write(float value)
+    JsonWriter &Value(float value)
     {
         m_writer.Double((double)value);
         return *this;
     }
 
-    JsonWriter &Write(uint64_t value)
+    JsonWriter &Value(uint64_t value)
     {
         m_writer.Uint64(value);
         return *this;
     }
 
 
-    JsonWriter &Write(int64_t value)
+    JsonWriter &Value(int64_t value)
     {
         m_writer.Int64(value);
         return *this;
     }
     
 
-    void WriteArray(const char *key)
-    {
-        m_writer.Key(key);
-        m_writer.StartArray();
-    }
-
-    
-    void WriteObject(const char *key)
-    {
-        m_writer.Key(key);
-        m_writer.StartObject();
-    }
     
     void StartArray()
     {

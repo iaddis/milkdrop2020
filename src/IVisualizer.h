@@ -26,7 +26,6 @@ struct PresetLoadArgs
 {
     float blendTime = 0.0f;
     float duration  = 10.0f;
-    bool  addToHistory = false;
 };
 
 
@@ -49,35 +48,24 @@ class IVisualizer
 public:
     virtual ~IVisualizer() = default;
     virtual void Draw(ContentMode mode, float alpha = 1.0f) =0;
-    virtual void SetOutputSize(Size2D size) = 0;
     virtual render::TexturePtr GetInternalTexture() = 0;
     virtual render::TexturePtr GetOutputTexture() =0;
-    virtual render::TexturePtr GetScreenshotTexture() =0;
+    virtual void CaptureScreenshot(render::TexturePtr texture, Vector2 pos, Size2D size) =0;
 
-
-    virtual void Render(float dt) =0;
-    virtual void CheckResize(Size2D size) =0;
+    virtual void Render(float dt, Size2D output_size, IAudioSourcePtr audioSource) =0;
     virtual void DrawDebugUI() = 0;
-    virtual void DumpState() = 0;
-	virtual int HandleRegularKey(char key) = 0;
+    virtual void DrawAudioUI() = 0;
     virtual void SetRandomSeed(uint32_t seed) = 0;
-    
-    
 
     virtual PresetPtr   LoadPresetFromFile(std::string &text, std::string path, std::string name, std::string &errors)  = 0;
     virtual void        SetPreset(PresetPtr preset, PresetLoadArgs args) = 0;
     
-    virtual void        LoadEmptyPreset() = 0;
-  
 
     virtual const std::string &GetPresetName() = 0;
     virtual float GetPresetProgress() = 0;
-   
-    virtual void ShowPresetEditor() = 0;
-    virtual void ShowPresetDebugger() = 0;
 };
 
 using IVisualizerPtr = std::shared_ptr<IVisualizer>;
 
 
-IVisualizerPtr CreateVisualizer(render::ContextPtr context, IAudioAnalyzerPtr audio, ITextureSetPtr texture_map, std::string pluginDir);
+IVisualizerPtr CreateVisualizer(render::ContextPtr context, ITextureSetPtr texture_map, std::string pluginDir);

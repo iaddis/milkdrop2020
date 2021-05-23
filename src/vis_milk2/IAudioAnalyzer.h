@@ -41,7 +41,7 @@ public:
     
     virtual void Reset() = 0;
     
-    virtual void Update(IAudioSourcePtr source, float dt, float gain) = 0;
+    virtual void Update(float dt, const SampleBuffer<Sample> &samples) = 0;
 
     virtual float GetSampleRate() = 0;
     virtual int GetBlockSize() = 0;

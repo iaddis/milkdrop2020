@@ -13,9 +13,6 @@
 
 -(void)draw:(int)screenId screenCount:(int)screenCount;
 
--(void)onKeyDown:(KeyEvent)e;
--(void)onKeyUp:(KeyEvent)e;
-
 -(void)onDragDrop:(NSArray * _Nonnull)files;
 
 -(bool)shouldQuit;
@@ -34,8 +31,6 @@
 //-(void)drawInDebugScreen;
 //-(void)drawInExternalScreen;
 //
-//-(void)onKeyDown:(KeyEvent)e;
-//-(void)onKeyUp:(KeyEvent)e;
 //
 //-(void)onDragDrop:(NSArray * _Nonnull)files;
 

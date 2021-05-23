@@ -262,6 +262,7 @@
 		2112291A26401F35001F8FF9 /* hlslang_tab.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = hlslang_tab.cpp; sourceTree = "<group>"; };
 		21A3B13B22990C2700540D1A /* libhlsl2glsl-ios.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libhlsl2glsl-ios.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		21A3B185229C5B7300540D1A /* libhlsl2glsl-tvos.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libhlsl2glsl-tvos.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		21DFB7F9264786270046A9B0 /* CMakeLists.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = CMakeLists.txt; sourceTree = "<group>"; };
 		2B951C991135194700DBAF46 /* libhlsl2glsl.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libhlsl2glsl.a; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -279,6 +280,7 @@
 		0867D691FE84028FC02AAC07 /* glslang */ = {
 			isa = PBXGroup;
 			children = (
+				21DFB7F9264786270046A9B0 /* CMakeLists.txt */,
 				2112282D26401C6D001F8FF9 /* hlslang */,
 				0867D69AFE84028FC02AAC07 /* External Frameworks and Libraries */,
 				034768DDFF38A45A11DB9C8B /* Products */,

@@ -236,9 +236,11 @@ public:
 
     virtual const std::string &GetDriver()  override { return m_driver; };
     virtual const std::string &GetDesc() override  { return m_description; };
+    virtual const std::string &GetShadingLanguage() override  { return m_shadingLanguageVersion; };
     
     std::string m_driver = "Null";
     std::string m_description =  "Null";
+    std::string m_shadingLanguageVersion =  "Null";
 
 	virtual void Present() override;
 	virtual void BeginScene() override;

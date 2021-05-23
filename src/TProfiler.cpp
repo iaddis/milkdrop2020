@@ -26,6 +26,7 @@
 
 #ifdef EMSCRIPTEN
 #include <emscripten.h>
+#include <emscripten/html5.h>
 #endif
 
 #include "../external/imgui/imgui_internal.h"
@@ -38,6 +39,9 @@
 
 namespace TProfiler
 {
+
+bool g_ProfilerEnabled = false;
+
 #if USE_CHRONO
 
 // only chrono stuff...
@@ -80,7 +84,7 @@ ProfilerTicks  GetTime()
     return ns;
 #elif defined(EMSCRIPTEN)
     // convert to nano seconds
-    return (ProfilerTicks)(emscripten_get_now() * 1000000.0);
+    return (ProfilerTicks)(emscripten_performance_now() * 1000000.0);
 #else
 #error Platform not supported
 #endif
@@ -829,7 +833,8 @@ public:
         writer.Write("pid", pid);
         writer.Write("tid", tid);
 
-        writer.WriteObject("args");
+        writer.Key("args");
+        writer.StartObject();
         writer.Write(arg_name, arg_value);
         writer.EndObject();
         
@@ -843,7 +848,8 @@ public:
 
         writer.Write("displayTimeUnit", "ms");
 
-        writer.WriteObject("otherData");
+        writer.Key("otherData");
+        writer.StartObject();
         writer.Write("platform", PlatformGetPlatformName());
         writer.Write("config", PlatformGetBuildConfig());
         writer.Write("version", PlatformGetAppVersion());
@@ -1525,7 +1531,7 @@ public:
         float bw = 6;
         float spacing = 1.0f;
         float bh = 64;
-        float scaley = 3.0f;
+        float scaley = 1.5f;
         float dx = bw + spacing;
         float dy = bh * scaley;
 
@@ -1776,6 +1782,12 @@ public:
         {
             Clear();
         }
+        ImGui::SameLine();
+
+        if (ImGui::Checkbox("Enabled", &g_ProfilerEnabled))
+        {
+//            g_ProfilerEnabled = !g_ProfilerEnabled;
+        }
 
         if (PlatformIsDebug())
         {
@@ -1878,26 +1890,35 @@ void OnGUIPanel()
     
 }
 
+
 void AddSpan(SectionPtr section, ProfilerTicks start)
 {
+    if (!g_ProfilerEnabled) return;
+    
     ProfilerTicks end = GetTime();
     s_log.AddEntry(section, start, end);
 }
 
 void AddAsyncBegin(SectionPtr section, uintptr_t id)
 {
+    if (!g_ProfilerEnabled) return;
+
     ProfilerTicks time = GetTime();
     s_log.AddAsyncBegin(section, time, id);
 }
 
 void AddAsyncNext(SectionPtr section, uintptr_t id)
 {
+    if (!g_ProfilerEnabled) return;
+
     ProfilerTicks time = GetTime();
     s_log.AddAsyncNext(section, time, id);
 }
 
 void AddAsyncEnd(SectionPtr section, uintptr_t id)
 {
+    if (!g_ProfilerEnabled) return;
+
     ProfilerTicks time = GetTime();
     s_log.AddAsyncEnd(section, time, id);
 }
@@ -1906,6 +1927,8 @@ void AddAsyncEnd(SectionPtr section, uintptr_t id)
 
 void AddGPUSpan(SectionPtr section, ProfilerTicks start,  ProfilerTicks end)
 {
+    if (!g_ProfilerEnabled) return;
+
     s_log.AddGPUEntry(section, start, end);
 }
 
@@ -1914,6 +1937,8 @@ void AddGPUSpan(SectionPtr section, ProfilerTicks start,  ProfilerTicks end)
 
 void AddEvent(SectionPtr section)
 {
+    if (!g_ProfilerEnabled) return;
+
     ProfilerTicks time = GetTime();
     s_log.AddEntry(section, time, time);
 }

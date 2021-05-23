@@ -1038,6 +1038,12 @@ CodeMap * createMetalSupportLibrary(ETargetVersion targetVersion)
     "bool3 greaterThan(float3 a, float3 b) {return a > b;}\n"
     "bool4 greaterThan(float4 a, float4 b) {return a > b;}\n"
                 );
+
+//    lib->insert(EOpCross,
+//    "float3  cross(float3  a, float3  b) {return a;}\n"
+//                );
+
+    
     
     lib->insert(EOpLessThan,
     "bool  lessThan(float  a, float  b) {return a < b;}\n"
@@ -1259,7 +1265,7 @@ CodeMap * createMetalSupportLibrary(ETargetVersion targetVersion)
 //       insertPost120TextureLookups(lib);
 //   }
 //   else {
-//       insertPre130TextureLookups(lib);
+       insertPre130TextureLookups(lib);
 //   }
 //
 //   lib->insert(EOpD3DCOLORtoUBYTE4,

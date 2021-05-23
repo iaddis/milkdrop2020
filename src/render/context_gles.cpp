@@ -230,10 +230,12 @@ public:
 
     virtual const std::string &GetDriver()  override { return m_driver; };
     virtual const std::string &GetDesc() override  { return m_description; };
+    virtual const std::string &GetShadingLanguage() override  { return m_shadingLanguageVersion; };
     
-    std::string m_driver = "GLES";
+    std::string m_driver = (const char *)glGetString(GL_VENDOR); 
     std::string m_description = (const char *)glGetString(GL_VERSION);
-
+    std::string m_shadingLanguageVersion = (const char *)glGetString(GL_SHADING_LANGUAGE_VERSION);;
+   
     
     virtual float GetTexelOffset() override
     {
@@ -990,13 +992,6 @@ void GLContext::ResetState()
     SetBlendDisable();
     SetScissorDisable();
     SetPointSize(1.0f);
-    #ifdef GL_VERTEX_PROGRAM_POINT_SIZE_ARB
-        glEnable(GL_VERTEX_PROGRAM_POINT_SIZE_ARB);
-    #endif
-
-#ifdef GL_PROGRAM_POINT_SIZE
-    glEnable(GL_PROGRAM_POINT_SIZE);
-#endif
     CheckGLError();
 }
 
@@ -1184,9 +1179,6 @@ void GLContext::InternalSetTexture(int index, TexturePtr texture, SamplerAddress
 void GLContext::SetPointSize(float size)
 {
     m_pointsize = size;
-#if !defined(GL_PROGRAM_POINT_SIZE) && defined(glPointSize)
-    glPointSize(size);
-#endif
 }
 
 

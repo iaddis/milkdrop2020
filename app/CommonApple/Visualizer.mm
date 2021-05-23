@@ -50,18 +50,6 @@
 }
 
 
--(void)onKeyDown:(KeyEvent)e
-{
-    _vizController->OnKeyDown(e);
-}
-
--(void)onKeyUp:(KeyEvent)e
-{
-    _vizController->OnKeyUp(e);
-
-}
-
-
 -(void)onDragDrop:(NSArray * _Nonnull)files
 {
     for (int i=0; i < files.count; i++)

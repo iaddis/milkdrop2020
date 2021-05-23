@@ -66,21 +66,20 @@ using StringVec = std::vector<std::string>;
 class CPlugin : public IVisualizer
 {
 public:
-        CPlugin(render::ContextPtr context, IAudioAnalyzerPtr audio, ITextureSetPtr texture_map, std::string assetDir);
+        CPlugin(render::ContextPtr context, ITextureSetPtr texture_map, std::string assetDir);
 		virtual ~CPlugin();
 
 		// called by vis.cpp, on behalf of Winamp:
 		virtual bool PluginInitialize();
-        virtual void Render(float dt) override;
-        virtual void CheckResize(Size2D size) override;
+        virtual void Render(float dt, Size2D outputSize, IAudioSourcePtr audioSource) override;
     
-        virtual void ShowPresetEditor() override
+        virtual void ShowPresetEditor()
         {
             m_showPresetEditor = !m_showPresetEditor;
         }
     
     
-    virtual void ShowPresetDebugger() override
+    virtual void ShowPresetDebugger()
     {
         m_pluginDebugUI = !m_pluginDebugUI;
     }
@@ -165,15 +164,12 @@ public:
         float m_fBlendDuration = 0;
         float m_fBlendProgress = 0;    // 0..1; updated every frame based on StartTime and Duration.
 
-        std::future<CStatePtr> m_presetLoadFuture;
-        
         IAudioAnalyzerPtr m_audio;
     
 		std::string	m_assetDir;
 		float		m_fRandStart[4];
 
         render::TexturePtr m_outputTexture;
-        render::TexturePtr m_screenshotTexture;
 		render::TexturePtr m_lpVS[2];
     
         std::vector<render::TexturePtr> m_blur_textures;
@@ -206,6 +202,9 @@ public:
 		//const char* GetDefaultCompShadersText() { return m_szDefaultCompShaderText; }
 		void        GenWarpPShaderText(std::string &szShaderText, float decay, bool bWrap);
 		void        GenCompPShaderText(std::string &szShaderText, float brightness, float ve_alpha, float ve_zoom, int ve_orient, float hue_shader, bool bBrighten, bool bDarken, bool bSolarize, bool bInvert);
+
+    
+        SampleBuffer<Sample>         m_samples;
 
 		// GET METHODS
 		// ------------------------------------------------------------
@@ -247,6 +246,7 @@ public:
         }
     
     
+    
         float GetImmRel(AudioBand band);
         float GetAvgRel(AudioBand band);
         float GetImmRelTotal();
@@ -286,10 +286,10 @@ public:
      
         virtual PresetPtr        LoadPresetFromFile(std::string &text, std::string path, std::string name, std::string &errors)  override;
         virtual void		SetPreset(PresetPtr preset, PresetLoadArgs args) override;
-        virtual void        LoadEmptyPreset() override;
+        virtual void        LoadEmptyPreset();
      
 		bool		ReversePropagatePoint(float fx, float fy, float *fx2, float *fy2);
-		virtual int 		HandleRegularKey(char key)  override;
+		virtual int 		HandleRegularKey(char key);
 
     
         void DrawImageWithShader(render::ShaderPtr shader, render::TexturePtr source, render::TexturePtr dest);
@@ -297,18 +297,21 @@ public:
     
 
         virtual void Draw(ContentMode mode, float alpha = 1.0f) override;
-        virtual void SetOutputSize(Size2D size) override;
+        virtual void SetOutputSize(Size2D size);
         virtual render::TexturePtr GetInternalTexture() override;
         virtual render::TexturePtr GetOutputTexture() override;
-        virtual render::TexturePtr GetScreenshotTexture() override;
         virtual void SetRandomSeed(uint32_t seed) override;
+    
+        virtual void CaptureScreenshot(render::TexturePtr texture, Vector2 pos, Size2D size) override;
+
     
         virtual render::TexturePtr LookupTexture(const std::string &name);
     
         void        DrawQuad(render::TexturePtr texture, float x, float y, float w, float h, Color4F color);
 
         virtual void        DrawDebugUI()  override;
-        virtual void DumpState() override;
+        virtual void DrawAudioUI() override;
+        virtual void DumpState();
     
 		void		DrawWave();
         void        DrawCustomWaves_ComputeBegin();

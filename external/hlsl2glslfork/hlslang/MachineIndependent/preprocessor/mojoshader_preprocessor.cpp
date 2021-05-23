@@ -344,7 +344,7 @@ IMPLEMENT_POOL(hlmojo_Define, define)
 // this is djb's xor hashing function.
 static inline uint32 hash_string_djbxor(const char *sym)
 {
-    uint32 hash = 5381;
+    register uint32 hash = 5381;
     while (*sym)
         hash = ((hash << 5) + hash) ^ *(sym++);
     return hash;

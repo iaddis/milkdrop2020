@@ -328,6 +328,7 @@ public:
     virtual float GetTexelOffset() = 0;
 	virtual const std::string &GetDriver() = 0;
 	virtual const std::string &GetDesc() = 0;
+    virtual const std::string &GetShadingLanguage() = 0;
     
     virtual void PushLabel(const char *name) {}
     virtual void PopLabel() {}

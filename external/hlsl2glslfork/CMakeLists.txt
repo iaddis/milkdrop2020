@@ -102,6 +102,9 @@ set(MACHINE_INDEPENDENT_FILES
   hlslang/MachineIndependent/SymbolTable.cpp
   hlslang/MachineIndependent/SymbolTable.h
   hlslang/MachineIndependent/ConstantFolding.cpp
+  hlslang/MachineIndependent/hlslang_tab.cpp
+  hlslang/MachineIndependent/hlslang_tab.h
+
 )
 
 source_group("Machine Independent" FILES ${MACHINE_INDEPENDENT_FILES})
@@ -115,6 +118,7 @@ set(MACHINE_INDEPENDENT_CPP_FILES
   hlslang/MachineIndependent/preprocessor/mojoshader.h
   hlslang/MachineIndependent/preprocessor/sourceloc.cpp
   hlslang/MachineIndependent/preprocessor/sourceloc.h
+
 )
 
 source_group("Machine Independent\\CPP" FILES ${MACHINE_INDEPENDENT_CPP_FILES})
@@ -132,14 +136,6 @@ set(GENERATED_DIR
 include_directories(${GENERATED_DIR})
 
 
-set(MACHINE_INDEPENDENT_GENERATED_SOURCE_FILES
-  ${GENERATED_DIR}/hlslang_tab.cpp
-  ${GENERATED_DIR}/hlslang_tab.h
-)
-
-SET_SOURCE_FILES_PROPERTIES(${MACHINE_INDEPENDENT_GENERATED_SOURCE_FILES} PROPERTIES
-  GENERATED 1
-)
 
 source_group("Machine Independent\\Generated Source" FILES ${MACHINE_INDEPENDENT_GENERATED_SOURCE_FILES})
                                          
@@ -166,6 +162,17 @@ elseif (APPLE)
     FIND_LIBRARY(OPENGL_LIBRARY OpenGL)
 	FIND_LIBRARY(COCOA_LIBRARY Cocoa)
     SET(TEST_LIBS ${OPENGL_LIBRARY} ${COCOA_LIBRARY})
+elseif (EMSCRIPTEN)
+    set(OSDEPENDENT_FILES
+      hlslang/OSDependent/Emscripten/osinclude.h
+      hlslang/OSDependent/Emscripten/ossource.cpp
+    )
+    source_group("OSDependent\\Emscripten" FILES ${OSDEPENDENT_FILES})
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/hlslang/OSDependent/Emscripten)
+
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+    SET(TEST_LIBS GL glut GLEW pthread)
+
 
 elseif (UNIX)
     set(OSDEPENDENT_FILES

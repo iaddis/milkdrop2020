@@ -98,6 +98,9 @@ void LogDrawPanel();
 
 void DirectoryGetFiles(std::string dir, std::vector<std::string> &files, bool recurse = false);
 bool DirectoryCreate(std::string dir);
+bool DirectoryExists(const std::string &path);
+void DirectoryCreateRecursive(const std::string &path);
+
 
 int64_t FileGetLastModified(std::string path);
 bool FileExists(std::string name);

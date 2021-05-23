@@ -45,16 +45,23 @@ int main(int argc, const char * argv[])
     std::string userDir= "user";
 
     
-    std::string firstPreset = "Standard/Aderrasi - Visitor";
+//    std::string firstPreset = "Standard/Aderrasi - Visitor";
     
     
     auto vizController = CreateVizController(context, pluginDir, userDir);
 
-    printf("1\n");
-    vizController->SelectPreset(firstPreset);
-    printf("2\n");
-    vizController->SetSelectionLock(true);
-    printf("3\n");
+    vizController->TestAllPresets(
+                                  [](std::string name, std::string error) {
+        
+                                    }
+                                  
+                                  );
+    
+//    printf("1\n");
+//    vizController->SelectPreset(firstPreset);
+//    printf("2\n");
+//    vizController->SetSelectionLock(true);
+//    printf("3\n");
     
     return 0;
 }

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>milkdr0p</title>
+    <title>m1lkdr0p</title>
     <style>
       body {
         font-family: arial;
@@ -16,17 +16,17 @@
       div.emscripten_border { border: 1px solid black; }
       /* the canvas *must not* have any border or padding, or mouse coords will be wrong */
 
-    canvas.emscripten {
-        position: absolute;
-        top: 0px;
-        left: 0px;
-        margin: 0px;
-        border: 0;
-        width: 100%;
-        height: 100%;
-        overflow: hidden;
-        display: block;
-    }
+        canvas.emscripten {
+            position: absolute;
+            top: 0px;
+            left: 0px;
+            margin: 0px;
+            border: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            display: block;
+        }
 
       #emscripten_logo {
         display: inline-block;
@@ -96,26 +96,26 @@
       }
 
       #output {
-        width: 100%;
+        position: absolute;
+        width: 80%;
         height: 200px;
-        margin: 0 auto;
-        margin-top: 10px;
-        border-left: 0px;
-        border-right: 0px;
-        padding-left: 0px;
-        padding-right: 0px;
-        display: block;
+        border: 0px;
+        display: none;
         background-color: black;
         color: white;
         font-family: 'Lucida Console', Monaco, monospace;
         outline: none;
       }
+        
+
     </style>
   </head>
   <body>
 
-    <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()"></canvas>
-    
+      <canvas class="emscripten" id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+
+      <textarea id="output" rows="8"></textarea>
+
     <div class="emscripten_border" hidden=1>
       <div class="spinner" id='spinner'></div>
       <div class="emscripten" id="status">Downloading...</div>
@@ -125,10 +125,6 @@
       </div>
     </div>
 
-
-<!--    
-  <textarea id="output" rows="8"></textarea>
--->
 
 <!--    <script type='text/javascript' src='audiotest.js'></script>-->
     <script type='text/javascript'>
@@ -159,12 +155,8 @@
           };
         })(),
         printErr: function(text) {
-          if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
-          if (0) { // XXX disabled for safety typeof dump == 'function') {
-            dump(text + '\n'); // fast, straight to the real console
-          } else {
+            if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
             console.error(text);
-          }
         },
         canvas: (function() {
           var canvas = document.getElementById('canvas');
@@ -203,6 +195,7 @@
         }
       };
       Module.setStatus('Downloading...');
+      /*
       window.onerror = function(event) {
         // TODO: do not warn on ok events like simulating an infinite loop or exitStatus
         Module.setStatus('Exception thrown, see JavaScript console');
@@ -211,6 +204,33 @@
           if (text) Module.printErr('[post-exception status] ' + text);
         };
       };
+         */
+        
+        window.onerror =   function (msg, url, lineNo, columnNo, error) {
+          var string = msg.toLowerCase();
+          var substring = "script error";
+          if (string.indexOf(substring) > -1){
+              printErr('Script Error: See Browser Console for Detail');
+          } else {
+            var message = [
+              'Message: ' + msg,
+              'URL: ' + url,
+              'Line: ' + lineNo,
+              'Column: ' + columnNo,
+              'Error object: ' + JSON.stringify(error)
+            ].join(' - ');
+
+            printErr(message);
+          }
+        
+          outputElement.style.display = 'block';
+          Module.setStatus = function(text) {
+            if (text) Module.printErr('[post-exception status] ' + text);
+          };
+
+
+          return false;
+        };
     </script>
     {{{ SCRIPT }}}
   </body>

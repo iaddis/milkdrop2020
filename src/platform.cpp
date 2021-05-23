@@ -20,6 +20,10 @@
 #include <sys/sysctl.h>
 #endif
 
+#ifdef EMSCRIPTEN
+#include <emscripten.h>
+#endif
+
 #ifdef __ANDROID__
 #include <android/log.h>
 #include <android/asset_manager_jni.h>
@@ -71,9 +75,27 @@ bool FileExists(std::string name)
 #else
 
     struct stat s;
-	return stat(name.c_str(), &s) == 0;
+    if (stat(name.c_str(), &s) != 0)
+    {
+        return false;
+    }
+    
+    return !S_ISDIR(s.st_mode);
 #endif
 }
+
+
+bool DirectoryExists(const std::string &path)
+{
+    struct stat s;
+    if (stat(path.c_str(), &s) != 0)
+    {
+        return false;
+    }
+    
+    return S_ISDIR(s.st_mode);
+}
+
 
 int64_t FileGetLastModified(std::string path)
 {
@@ -478,6 +500,22 @@ bool DirectoryCreate(std::string path)
 }
 
 
+void DirectoryCreateRecursive(const std::string &path)
+{
+    if (path.empty())
+        return;
+    
+    if (DirectoryExists(path)) {
+        return;
+    }
+    
+    // create parent directory....
+    DirectoryCreateRecursive( PathGetDirectory(path) );
+    
+    DirectoryCreate(path);
+}
+
+
 
 void DirectoryGetFiles(std::string dir, std::vector<std::string> &files, bool recurse)
 {
@@ -572,7 +610,7 @@ void DirectoryGetFiles(std::string dir, std::vector<std::string> &files, bool re
 
 const char *PlatformGetAppName()
 {
-    return "MilkDropPortable";
+    return "m1lkdr0p";
 }
 
 const char *PlatformGetPlatformName()
@@ -645,7 +683,7 @@ std::string PlatformGetTimeString()
 
 const char *PlatformGetAppVersion()
 {
-    return "1.1.0";
+    return "1.2.0";
 }
 
 
@@ -707,7 +745,18 @@ const char *PlatformGetDeviceModel()
                                  );
     }
     return _model;
-    
+#elif EMSCRIPTEN
+    static const char *_agent;
+    if (!_agent)
+    {
+         _agent = (const char *)EM_ASM_INT({
+            const agent = window.navigator.userAgent;
+            const ptr = allocate(intArrayFromString(agent), ALLOC_NORMAL);
+            return ptr;
+        });
+    }
+    return _agent;
+
 #else
     return "<unknown>";
 #endif
@@ -726,6 +775,8 @@ const char *PlatformGetDeviceArch()
     }
     return _model;
     
+#elif EMSCRIPTEN
+    return "WebAssembly";
 #else
     return "<unknown>";
 #endif

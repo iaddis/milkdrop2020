@@ -644,6 +644,12 @@ public:
     {
         return m_desc;
     };
+
+    virtual const std::string &GetShadingLanguage() override 
+    {
+        return m_shadingLanguageVersion;
+    }
+
 	
 	virtual void Present()  override;
     virtual void ResetState();
@@ -784,7 +790,7 @@ public:
     std::string m_driver = "Metal";
     
     std::string m_desc;
-
+    std::string m_shadingLanguageVersion = "Metal";
     
     PipelineKey _key;
     
