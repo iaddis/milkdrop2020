@@ -287,7 +287,7 @@ VizController::VizController(ContextPtr context, std::string assetDir, std::stri
 
 	m_currentPreset = nullptr;
     
-    m_selectionLocked = true;
+    m_selectionLocked = false;
     
     m_showProfiler = false;
     
@@ -908,7 +908,7 @@ void VizController::NavigateNext()
     auto preset = m_navigateHistory ? m_presetHistory.SelectNext() : m_presetListFiltered.SelectNext();
     if (preset)
     {
-        SetSelectionLock(true);
+        SetSelectionLock(false);
         LoadPreset(preset, false);
     }
     else
