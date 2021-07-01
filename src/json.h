@@ -158,6 +158,11 @@ public:
     {
         m_writer.EndObject();
     }
+    
+    bool IsComplete()
+    {
+        return m_writer.IsComplete();
+    }
 
 protected:
     rapidjson::PrettyWriter<rapidjson::StringBuffer> &m_writer;
@@ -178,6 +183,11 @@ public:
     const char *ToCString()
     {
         return m_stringBuffer.GetString();
+    }
+    
+    bool SaveToFile(const std::string &path)
+    {
+        return FileWriteAllText( path, ToCString() );
     }
 
 private:

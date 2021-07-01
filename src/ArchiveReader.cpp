@@ -1,8 +1,13 @@
 
+#define NOMINMAX
 #include "ArchiveReader.h"
+
+
+#ifndef WIN32
 #include "../external/minizip/zip.h"
 #include "../external/minizip/unzip.h"
 #include "../external/minizip/ioapi_mem.h"
+#endif
 
 #include "../external/lzma1801/C/7z.h"
 #include "../external/lzma1801/C/7zAlloc.h"
@@ -15,8 +20,14 @@
 #include "path.h"
 #include "platform.h"
 
+#include <stdint.h>
+#include <memory>
+#include <algorithm>
+
 namespace Archive {
 
+
+#ifndef WIN32
 class ZipReader : public ArchiveReader
 {
     
@@ -123,6 +134,7 @@ public:
     
     
 };
+#endif
 
 static const ISzAlloc g_Alloc = { SzAlloc, SzFree };
 
@@ -163,13 +175,13 @@ public:
             switch (origin)
             {
                 case SZ_SEEK_SET:
-                    _offset = *pos;
+                    _offset = (size_t)*pos;
                     break;
                 case SZ_SEEK_CUR:
-                    _offset += *pos;
+                    _offset += (size_t)*pos;
                     break;
                 case SZ_SEEK_END:
-                    _offset = _length - *pos;
+                    _offset = (size_t)(_length - *pos);
                     break;
             }
             *pos = _offset;
@@ -270,7 +282,7 @@ public:
     virtual bool NextFile(ArchiveFileInfo &fi) override
     {
         ++_fileIndex;
-        if (_fileIndex >= _db.NumFiles)
+        if (_fileIndex >= (int)_db.NumFiles)
             return false;
         
         size_t len = SzArEx_GetFileNameUtf16(&_db, _fileIndex, NULL);
@@ -279,14 +291,14 @@ public:
         
         fi.is_directory = SzArEx_IsDir(&_db, _fileIndex);
         fi.compressedSize = 0;
-        fi.uncompressedSize = SzArEx_GetFileSize(&_db, _fileIndex);
+        fi.uncompressedSize = (long)SzArEx_GetFileSize(&_db, _fileIndex);
         ConvertString(fi.name, _filename);
         return true;
     }
     
     virtual bool ExtractBinary(std::vector<uint8_t> &buffer) override
     {
-        if (_fileIndex >= _db.NumFiles)
+        if (_fileIndex >= (int)_db.NumFiles)
             return false;
         
         size_t offset = 0;
@@ -332,6 +344,8 @@ ArchiveReaderPtr OpenArchive(std::string path)
 {
     std::string ext = PathGetExtensionLower(path);
     
+
+#ifndef WIN32
     if (ext == ".zip")
     {
         auto reader = std::make_shared<ZipReader>();
@@ -341,7 +355,7 @@ ArchiveReaderPtr OpenArchive(std::string path)
         }
         return reader;
     }
-    
+#endif
     if (ext == ".7z")
     {
         auto reader = std::make_shared<SevenZipReader>();

@@ -7,23 +7,17 @@
 
 #import "RenderViewControllerIOS.h"
 #include "render/context_metal.h"
+#include "IVizController.h"
 
 @interface ExternalViewController : UIViewController <MTKViewDelegate> {
     
 }
 
 
-@property (strong, nonatomic) IBOutlet Visualizer * _Nullable visualizer;
-
-
+@property (nonatomic)  IVizControllerPtr  visualizer;
 @property (nonatomic) render::metal::IMetalContextPtr context;
 
-
-
-
 -(void)draw;
-
-
 
 
 @end

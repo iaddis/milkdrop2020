@@ -23,7 +23,8 @@ typedef int SOCKET;
 
 
 
-#include "VizController.h"
+#include "IAudioSource.h"
+#include "platform.h"
 
 #include <thread>
 #include <list>

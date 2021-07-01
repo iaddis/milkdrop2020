@@ -21,7 +21,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 
-set(CMAKE_VERBOSE_MAKEFILE on)
+#set(CMAKE_VERBOSE_MAKEFILE on)
 
 set(COMMON_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(APP_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/app)
@@ -103,6 +103,7 @@ set(MDP_SOURCE
         ${COMMON_SOURCE_DIR}/ArchiveReader.cpp
         ${COMMON_SOURCE_DIR}/ImageReader.cpp
         ${COMMON_SOURCE_DIR}/ImageWriter.cpp
+        ${COMMON_SOURCE_DIR}/PresetBundle.cpp
         ${COMMON_SOURCE_DIR}/VizController.cpp
         ${COMMON_SOURCE_DIR}/TProfiler.cpp
         ${COMMON_SOURCE_DIR}/imgui_support.cpp
@@ -111,7 +112,6 @@ set(MDP_SOURCE
         ${COMMON_SOURCE_DIR}/vis_milk2/plugin.cpp
         ${COMMON_SOURCE_DIR}/vis_milk2/state.cpp
         ${COMMON_SOURCE_DIR}/vis_milk2/AudioAnalyzer.cpp
-        ${COMMON_SOURCE_DIR}/audio/RawFileAudioSource.cpp
         ${COMMON_SOURCE_DIR}/audio/WavFileAudioSource.cpp
         ${COMMON_SOURCE_DIR}/audio/NullAudioSource.cpp
         ${COMMON_SOURCE_DIR}/render/context.cpp

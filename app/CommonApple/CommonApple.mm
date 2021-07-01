@@ -39,3 +39,16 @@ bool GetApplicationSupportDir(std::string &outdir)
     return true;
 }
 
+std::string AppGetShortVersionString()
+{
+    NSString * version = [[NSBundle mainBundle] objectForInfoDictionaryKey: @"CFBundleShortVersionString"];
+    return version.UTF8String;
+}
+
+std::string AppGetBuildVersionString()
+{
+    NSString * build = [[NSBundle mainBundle] objectForInfoDictionaryKey: (NSString *)kCFBundleVersionKey];
+    if (!build) return "0";
+    return build.UTF8String;
+}
+

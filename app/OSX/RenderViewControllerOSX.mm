@@ -6,6 +6,8 @@
 
 #import "RenderViewControllerOSX.h"
 
+#include "IVizController.h"
+#include "VizController.h"
 #include "render/context.h"
 #include "render/context_metal.h"
 #include "render/context_gles.h"
@@ -17,6 +19,18 @@
 #include "TProfiler.h"
 #include "platform.h"
 
+#include "keycode.h"
+
+
+struct KeyEvent
+{
+    char c;
+    KeyCode  code;
+    bool     KeyShift;
+    bool     KeyCtrl;
+    bool     KeyAlt;
+    bool     KeyCommand;
+};
 
 
 static KeyEvent ConvertKeyEvent(NSEvent *event)
@@ -39,6 +53,7 @@ static KeyEvent ConvertKeyEvent(NSEvent *event)
     render::ContextPtr _gl_context;
     render::metal::IMetalContextPtr _metal_context;
     NSTrackingArea *_trackingArea;
+    IVizControllerPtr _vizController;
 }
 
 
@@ -89,7 +104,7 @@ static KeyEvent ConvertKeyEvent(NSEvent *event)
 
 -(void)onDragDrop:(NSArray * _Nonnull)files
 {
-    [self.visualizer onDragDrop:files];
+//    [self.visualizer onDragDrop:files];
 }
 
 
@@ -143,8 +158,15 @@ bool UseGL = false;
         [self initGL];
     }
     
-    self.visualizer = [[Visualizer alloc] initWithContext:_context];
-
+    
+    
+    std::string resourceDir;
+    GetResourceDir(resourceDir);
+    std::string assetDir =  PathCombine(resourceDir,  "assets");
+    std::string userDir;
+    GetApplicationSupportDir(userDir);
+    _vizController = CreateVizController(_context, assetDir, userDir);
+    
     
     ImGui_ImplOSX_Init();
     
@@ -296,13 +318,17 @@ bool UseGL = false;
             );
 
 //          _context->SetView( _view );
-        [self.visualizer draw:0 screenCount:1];
-        
-        if (self.visualizer.shouldQuit)
-        {
-            NSWindow *window = view.window;
-            [window close];
-        }
+        _context->BeginScene();
+        _vizController->Render(0, 1);
+        _context->EndScene();
+        _context->Present();
+
+
+//        if (_vizController->ShouldQuit())
+//        {
+//            NSWindow *window = view.window;
+//            [window close];
+//        }
   }
 }
 
@@ -325,14 +351,17 @@ bool UseGL = false;
 //
      
         _metal_context->SetView( view );
-        [self.visualizer draw:0 screenCount:1];
-     
+        _context->BeginScene();
+        _vizController->Render(0, 1);
+        _context->EndScene();
+        _context->Present();
 
-        if (self.visualizer.shouldQuit)
-        {
-            NSWindow *window = view.window;
-            [window close];
-        }
+
+//        if (_vizController->ShouldQuit())
+//        {
+//            NSWindow *window = view.window;
+//            [window close];
+//        }
     }
 }
 

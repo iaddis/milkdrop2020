@@ -402,7 +402,7 @@ public:
     void ComputeGridAlphaValues_ComputeBegin();
     void ComputeGridAlphaValues_ComputeEnd();
 
-    const std::string &GetName() const {return m_desc;}
+    const std::string &GetName() const {return m_name;}
     void ShowDebugUI( CStateDebugPanel mode);
 
     void DebugUI(bool *open);
@@ -414,8 +414,6 @@ public:
     bool UsesCompShader() const { return m_nCompPSVersion > 0;}
     bool UsesWarpShader() const { return m_nWarpPSVersion > 0;}
 
-    const std::string &GetDescription() const {return m_desc;}
-    const std::string &GetPath() const {return m_path;}
 
     float frand();
     
@@ -423,8 +421,7 @@ public:
     
 	CPlugin * m_plugin;
 
-	std::string m_desc;		// this is just the filename, without a path or extension.
-    std::string m_path;     // path to the preset that was loadedf
+	std::string m_name;		// this is just the filename, without a path or extension.
     
 	ShaderInfoPtr m_shader_warp;
 	ShaderInfoPtr m_shader_comp;

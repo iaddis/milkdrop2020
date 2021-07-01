@@ -142,7 +142,10 @@
 //        }
         
         self.context->SetView(view);
-        [self.visualizer draw:1 screenCount:2];
+        self.context->BeginScene();
+        self.visualizer->Render(1, 2);
+        self.context->EndScene();
+        self.context->Present();
     }
 }
 

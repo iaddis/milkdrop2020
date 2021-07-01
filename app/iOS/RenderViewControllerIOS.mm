@@ -15,19 +15,72 @@
 #include "../external/imgui/imgui.h"
 #include "../external/imgui/backends/imgui_impl_osx.h"
 #include "../CommonApple/CommonApple.h"
-#import "../CommonApple/Visualizer.h"
 
 #import "ExternalViewController.h"
 
+struct ToolbarItemInfo
+{
+    UIToolbarButton button;
+    NSString * imageName = nil;
+};
+
+static ToolbarItemInfo _toolbar_iteminfo[] =
+{
+    {UIToolbarButton::FlexibleSpace},
+    {UIToolbarButton::NavigatePrevious, @"arrow.left.circle"},
+    {UIToolbarButton::NavigateNext,     @"arrow.right.circle"},
+    
+    {UIToolbarButton::FixedSpace},
+    
+    {UIToolbarButton::SelectionLock,    @"lock.open.fill"},
+    {UIToolbarButton::SelectionUnlock,  @"lock.fill"},
+    {UIToolbarButton::NavigateShuffle,  @"shuffle"},
+
+    {UIToolbarButton::FixedSpace},
+    
+    {UIToolbarButton::Play,             @"play.fill"},
+    {UIToolbarButton::Pause,            @"pause.fill"},
+    {UIToolbarButton::Step,             @"forward.frame.fill"},
+
+    {UIToolbarButton::FixedSpace},
+    
+    {UIToolbarButton::Like,             @"heart"},
+    {UIToolbarButton::Unlike,           @"heart.fill"},
+    {UIToolbarButton::Blacklist,        @"heart.slash"},
+    {UIToolbarButton::Unblacklist,      @"heart.slash.fill"},
+
+    {UIToolbarButton::FixedSpace},
+    
+    {UIToolbarButton::MicrophoneOn,  @"mic.fill"},
+    {UIToolbarButton::MicrophoneOff, @"mic.slash.fill"},
+    
+    {UIToolbarButton::FixedSpace},
+    
+    {UIToolbarButton::SettingsShow,      @"gearshape"},
+    {UIToolbarButton::SettingsHide,     @"gearshape.fill"},
+    
+    {UIToolbarButton::FlexibleSpace},
+};
+    
 
 @implementation RenderViewControllerIOS
 {
-    MTKView *_metal_view;
+    __weak IBOutlet MTKView *_metal_view;
+    __weak IBOutlet UIToolbar *_toolbar_view;
+    __weak IBOutlet UIView *_hud_view;
+    __weak IBOutlet UIButton *_hud_preset_title;
+    
+    std::vector<UIBarButtonItem *> _toolbaritem_list;
+    std::vector<bool> _toolbaritem_visible;
+    
     UIWindow * _externalWindow;
     ExternalViewController * _externalWindowController;
-    render::ContextPtr _context;
-    render::metal::IMetalContextPtr _metal_context;
-    int _screenCount;
+    render::metal::IMetalContextPtr _context;
+    IVizControllerPtr _vizController;
+    
+    std::string _preset_title;
+    std::string _old_preset_title;
+    
 }
 
 #if !TARGET_OS_TV
@@ -36,6 +89,13 @@
 {
     return YES;
 }
+
+
+-(BOOL)shouldAutorotate
+{
+    return YES;
+}
+
 #endif
 
 -(BOOL)prefersHomeIndicatorAutoHidden
@@ -43,61 +103,35 @@
     return YES;
 }
 
-
 - (void)viewDidLoad
 {
     PROFILE_FUNCTION()
 
     [super viewDidLoad];
     
-    _screenCount = 1;
-
+    [self initMetal];
     
-//   if (!UseGL)
-   {
-       [self initMetal];
-   }
-//   else
-//   {
-//       [self initGL];
-//   }
-   
-   self.visualizer = [[Visualizer alloc] initWithContext:_context];
-    
+    std::string resourceDir;
+    GetResourceDir(resourceDir);
+    std::string assetDir =  PathCombine(resourceDir, "assets");
+    std::string userDir;
+    GetApplicationSupportDir(userDir);
 
+
+    _vizController = CreateVizController(_context, assetDir, userDir);
+      
+
+    [self setupToolbar];
     [self setupScreens];
     [self setupGestures];
+    
+    _hud_preset_title.layer.cornerRadius = 8;
+    _hud_preset_title.layer.borderColor = [UIColor darkGrayColor].CGColor;
+    _hud_preset_title.layer.borderWidth = 1.0f;
+    [_hud_preset_title.layer setMasksToBounds:YES];
+    
+    _vizController->HideDebugUI();
 }
-
-#if 0
--(void)initGL
-{
-    PROFILE_FUNCTION()
-
-    EAGLContext *eagl_context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES3];
-    
-    GLKView * view = [[GLKView alloc] initWithFrame:self.view.frame context:eagl_context];
-    
-    view.drawableColorFormat = GLKViewDrawableColorFormatRGBA8888;
-    view.drawableDepthFormat = GLKViewDrawableDepthFormatNone;
-    view.drawableStencilFormat = GLKViewDrawableStencilFormatNone;
-    view.drawableMultisample   = GLKViewDrawableMultisampleNone;
-    
-    
-    view.delegate = self;
-    self.view = view;
-    _gl_view = view;
-    
-    
-    [view bindDrawable];
-    
-    _gl_context = render::gles::GLCreateContext();
-    _gl_context->SetRenderTarget(nullptr);
-    
-    _context = _gl_context;
-
-}
-#endif
 
 -(void)initMetal
 {
@@ -109,7 +143,8 @@
         NSLog(@"Metal is not supported on this device");
         return;
     }
-    MTKView *view = [[MTKView alloc] initWithFrame:self.view.frame device:device];;
+    MTKView *view = _metal_view;
+    view.device = device;
     
     // configure view
 //    view.depthStencilPixelFormat = MTLPixelFormatDepth32Float_Stencil8;
@@ -144,44 +179,179 @@
 //    [view registerDragDrop];
     
 
-    self.view = view;
-    
+//    self.view = view;
     
     
     
 
-        if (@available(tvOS 13.0, iOS 13.0, *))
-        {
+
+    if (@available(tvOS 13.0, iOS 13.0, *))
+    {
+    
+        CAMetalLayer *layer = (CAMetalLayer *)view.layer;
+//        layer.wantsExtendedDynamicRangeContent= YES;
+//        layer.pixelFormat = view.colorPixelFormat;
+        const CFStringRef name = kCGColorSpaceExtendedSRGB;
+//        const CFStringRef name = kCGColorSpaceExtendedLinearSRGB;
+    //    const CFStringRef name = kCGColorSpaceSRGB;
+    //    const CFStringRef name = kCGColorSpaceSRGB;
+
+        CGColorSpaceRef colorspace = CGColorSpaceCreateWithName(name);
+        layer.colorspace = colorspace;
+        CGColorSpaceRelease(colorspace);
+    }
+
+
+
+
+    
+    
+
+    _context = render::metal::MetalCreateContext(device);
+    _context->SetView( view );
+    _context->SetRenderTarget(nullptr);
+    
+}
+
+
+
+-(void)updateUI
+{
+    _vizController->SetControlsVisible(false);
+    
+    if (!_vizController->IsDebugUIVisible())
+    {
+        // UI is hidden
+        _hud_view.hidden = YES;
+        return;
+    }
+    
+
+    // UI is visible
+    _hud_view.hidden = NO;
+    
+    // update preset title
+    _vizController->GetPresetTitle(_preset_title);
+    if (_preset_title != _old_preset_title)
+    {
+        [_hud_preset_title  setTitle: [NSString stringWithUTF8String:_preset_title.c_str()]
+                            forState:UIControlStateNormal
+         ];
+        _old_preset_title = _preset_title;
+    }
+    
+    // update toolbar
+    [self updateToolbar];
+}
+
+-(void)updateToolbar
+{
+    if (!_vizController)
+        return;
+    
+    size_t count = _toolbaritem_list.size();
+
+    bool updateToolbar = false;
+    int itemCount  = 0;
+    for (size_t i=0; i < count; i++)
+    {
+        UIBarButtonItem *item = _toolbaritem_list[i];
+        UIToolbarButton buttonid = (UIToolbarButton)(item.tag);
+        bool visible = _vizController->IsToolbarButtonVisible( buttonid );
         
-            CAMetalLayer *layer = (CAMetalLayer *)view.layer;
-    //        layer.wantsExtendedDynamicRangeContent= YES;
-    //        layer.pixelFormat = view.colorPixelFormat;
-            const CFStringRef name = kCGColorSpaceExtendedSRGB;
-    //        const CFStringRef name = kCGColorSpaceExtendedLinearSRGB;
-        //    const CFStringRef name = kCGColorSpaceSRGB;
-        //    const CFStringRef name = kCGColorSpaceSRGB;
-
-            CGColorSpaceRef colorspace = CGColorSpaceCreateWithName(name);
-            layer.colorspace = colorspace;
-            CGColorSpaceRelease(colorspace);
+        // did visibilty state change?
+        if (visible != _toolbaritem_visible[i])
+        {
+            _toolbaritem_visible[i] = visible;
+            updateToolbar = true;
         }
-
+        
+        if (visible)
+        {
+            itemCount++;
+        }
+    }
     
     
-    
-    
-    _metal_view = view;
-    
-
-    _metal_context = render::metal::MetalCreateContext(device);
-    _metal_context->SetView( view );
-    _metal_context->SetRenderTarget(nullptr);
-    
-    _context = _metal_context;
+    if (updateToolbar)
+    {
+        // rebuild toolbar items....
+        NSMutableArray<UIBarButtonItem *>  *items = [NSMutableArray<UIBarButtonItem *> arrayWithCapacity:itemCount];
+       
+        for (size_t i=0; i < _toolbaritem_list.size(); i++)
+        {
+            if (_toolbaritem_visible[i])
+            {
+                [items addObject: _toolbaritem_list[i]];
+            }
+        }
+        
+        _toolbar_view.items = items;
+    }
 
 }
 
 
+-(void)onToolbarButtonPressed:(UIBarButtonItem *)sender
+{
+    UIToolbarButton button =  (UIToolbarButton)sender.tag;
+
+    // trigger button press...
+    if (_vizController)
+        _vizController->OnToolbarButtonPressed(button);
+    
+    [self updateToolbar];
+}
+
+-(void)setupToolbar
+{
+    // create all button and space  items
+    int count = sizeof(_toolbar_iteminfo) /  sizeof(_toolbar_iteminfo[0]);
+
+    _toolbaritem_list.reserve(count);
+    _toolbaritem_visible.reserve(count);
+    
+    for (int i=0; i < count; i++)
+    {
+        const auto &info = _toolbar_iteminfo[i];
+        
+        if (info.button == UIToolbarButton::FlexibleSpace) {
+            UIBarButtonItem *space_item = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
+                                                                                  target:nil
+                                                                                  action:nil];
+            space_item.tag = (NSInteger)info.button;
+            _toolbaritem_list.push_back(space_item);
+        } else  if (info.button == UIToolbarButton::FixedSpace) {
+            UIBarButtonItem *space_item = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
+                                                                                  target:nil
+                                                                                  action:nil];
+            space_item.width = 40.0f;
+            space_item.tag = (NSInteger)info.button;
+            _toolbaritem_list.push_back(space_item);
+        } else {
+            
+            NSString  *imageName = info.imageName;
+            
+            
+            UIImage *image = [UIImage systemImageNamed:imageName];
+            UIBarButtonItem *button =  [[UIBarButtonItem alloc]
+                                        initWithImage:image
+                                            style:UIBarButtonItemStylePlain
+                                            target:self
+                                            action:@selector(onToolbarButtonPressed:)
+             ];
+            
+            button.width = 40.0f;
+            button.tag = (NSInteger)info.button;
+            _toolbaritem_list.push_back(button);
+        }
+        
+        _toolbaritem_visible.push_back(false);
+
+    }
+    
+    [self updateToolbar];
+}
 
 -(void)setupScreens
 {
@@ -215,7 +385,7 @@
 
 -(void)setupExternalScreen:(UIScreen *)screen
 {
-    if (!_metal_context)
+    if (!_context)
         return;
     
     if (_externalWindow)
@@ -223,8 +393,8 @@
     
     UIStoryboard *sb = self.storyboard;
     _externalWindowController = (ExternalViewController *)[sb  instantiateViewControllerWithIdentifier:@"ExternalWindowScene"];
-    _externalWindowController.context = _metal_context;
-    _externalWindowController.visualizer = self.visualizer;
+    _externalWindowController.context = _context;
+    _externalWindowController.visualizer = _vizController;
 
     
     _externalWindow = [[UIWindow alloc] initWithFrame:screen.bounds];
@@ -232,8 +402,6 @@
     _externalWindow.rootViewController = _externalWindowController;
     _externalWindow.hidden = NO;
 
-
-    _screenCount = 2;
     NSLog(@"UIWindow: %@ screen:%fx%f window:%fx%f\n", _externalWindow,
           screen.bounds.size.width, screen.bounds.size.height,
              _externalWindow.bounds.size.width,
@@ -254,7 +422,6 @@
     _externalWindowController = nil;
     _externalWindow.hidden = YES;
     _externalWindow = nil;
-    _screenCount = 1;
 }
 
 - (void)didReceiveMemoryWarning {
@@ -352,46 +519,37 @@
     
     
 }
-- (void)glkView:(GLKView *)view drawInRect:(CGRect)rect
-{
-    @autoreleasepool {
-          // setup viewport
-//          _gl_context->SetView(view);
-         PROFILE_FRAME()
-
-        [view bindDrawable];
-
-        // setup viewport
-        GLsizei width  = (int)view.drawableWidth;
-        GLsizei height = (int)view.drawableHeight;
-        CGFloat framebufferScale = view.window.screen.scale ?: UIScreen.mainScreen.scale;
-        _context->SetDisplayInfo(
-            {
-            .size = Size2D(width, height),
-            .format = render::PixelFormat::RGBA8Unorm,
-            .refreshRate = 60.0f,
-            .scale = (float)framebufferScale,
-            .samples = 1,
-            .maxEDR = 1.0f
-            }
-            );
-
-
-        
-        [self.visualizer draw:0 screenCount:_screenCount];
-
-    }
-}
 
 - (void)drawInMTKView:(nonnull MTKView *)view
 {
     @autoreleasepool {
         PROFILE_FRAME()
 
-        // setup viewport
-        _metal_context->SetView(view);
+        int screenCount = 1;
         
-        [self.visualizer draw:0 screenCount:_screenCount];
+        if (_externalWindow != nil)
+        {
+            // force enable debug UI if external window is up
+            _vizController->ShowDebugUI();
+            screenCount = 2;
+        }
+        
+        _context->SetView(view);
+        _context->BeginScene();
+        _vizController->Render(0, screenCount);
+        _context->EndScene();
+        _context->Present();
+        
+        
+        // release touches
+        ImGuiIO &io = ImGui::GetIO();
+        if (!io.MouseDown[0])
+        {
+            io.MousePos = ImVec2(FLT_MAX, FLT_MAX);
+        }
+
+        
+        [self updateUI];
 
     }
 }
@@ -411,9 +569,21 @@
 // when there are multiple active touches. But for demo purposes, single-touch
 // interaction actually works surprisingly well.
 - (void)updateIOWithTouchEvent:(UIEvent *)event {
-    UITouch *anyTouch = event.allTouches.anyObject;
-    CGPoint touchLocation = [anyTouch locationInView:self.view];
+
     ImGuiIO &io = ImGui::GetIO();
+
+    UITouch *anyTouch = event.allTouches.anyObject;
+    if (!anyTouch) return;
+    
+    if (anyTouch.view != _hud_view && anyTouch.view != _metal_view )
+    {
+        // not within any imgui view...
+        io.MousePos = ImVec2(FLT_MAX, FLT_MAX);
+        io.MouseDown[0] = false;
+        return;
+    }
+        
+    CGPoint touchLocation = [anyTouch locationInView:anyTouch.view];
     io.MousePos = ImVec2(touchLocation.x, touchLocation.y);
     
     BOOL hasActiveTouch = NO;

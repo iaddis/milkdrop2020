@@ -3,11 +3,6 @@
 
 #include "render/context.h"
 #include "audio/IAudioSource.h"
-#include "vis_milk2/IAudioAnalyzer.h"
-#include "script/script.h"
-#include <future>
-
-
 
 enum class ContentMode
 {
@@ -57,7 +52,7 @@ public:
     virtual void DrawAudioUI() = 0;
     virtual void SetRandomSeed(uint32_t seed) = 0;
 
-    virtual PresetPtr   LoadPresetFromFile(std::string &text, std::string path, std::string name, std::string &errors)  = 0;
+    virtual PresetPtr   LoadPreset(const std::string &text, std::string name, std::string &errors)  = 0;
     virtual void        SetPreset(PresetPtr preset, PresetLoadArgs args) = 0;
     
 

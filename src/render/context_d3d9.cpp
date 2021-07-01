@@ -34,7 +34,7 @@ using DXShaderPtr = std::shared_ptr<DXShader>;
 D3DVERTEXELEMENT9 g_MyVertDecl[] =
 {
 	{ 0, offsetof(Vertex, x),  D3DDECLTYPE_FLOAT3,   D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
-	{ 0, offsetof(Vertex, Diffuse), D3DDECLTYPE_UBYTE4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_COLOR,    0 },
+	{ 0, offsetof(Vertex, Diffuse), D3DDECLTYPE_UBYTE4N, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_COLOR,    0 },
 	{ 0, offsetof(Vertex, tu), D3DDECLTYPE_FLOAT4,   D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
 	{ 0, offsetof(Vertex, rad), D3DDECLTYPE_FLOAT2,   D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 1 },
 	D3DDECL_END()
@@ -173,12 +173,13 @@ public:
     }
 
 
+	virtual const std::string& GetShadingLanguage() override { return m_shadingLanguageVersion; };
 
-	virtual TexturePtr CreateTextureFromFile(const char *name, const char *path)  override;
+
 	virtual TexturePtr CreateRenderTarget(const char *name, int width, int height, PixelFormat format)  override;
 
 
-	virtual TexturePtr CreateTexture(const char *name, int width, int height, PixelFormat format, const uint32_t *data)  override;
+	virtual TexturePtr CreateTexture(const char *name, int width, int height, PixelFormat format, const void *data)  override;
 
 	virtual ShaderPtr CreateShader(const char *name)  override;
 	virtual void SetShader(ShaderPtr shader) override;
@@ -240,6 +241,7 @@ public:
 
     std::string m_driver = "D3D9";
     std::string m_description = "D3D9";
+	std::string m_shadingLanguageVersion = "HLSL";
 
 	virtual void Present()  override;
 	virtual void BeginScene()  override;
@@ -1191,7 +1193,7 @@ public:
     CompilerInclude(std::string path)
         :m_path(path) {}
 
-    HRESULT Open(D3DXINCLUDE_TYPE IncludeType, LPCSTR pFileName, LPCVOID pParentData, LPCVOID* ppData, UINT* pBytes) override
+	STDMETHOD(Open)(D3DXINCLUDE_TYPE IncludeType, LPCSTR pFileName, LPCVOID pParentData, LPCVOID* ppData, UINT* pBytes) override
     {
 		std::string dir = PathGetDirectory(m_path);
         std::string path = PathCombine(dir, pFileName);
@@ -1209,7 +1211,7 @@ public:
         return S_OK;
 
     }
-    HRESULT Close(LPCVOID pData) override
+	STDMETHOD(Close)(LPCVOID pData) override
     {
         free( (void *)pData);
         return S_OK;
@@ -1547,7 +1549,7 @@ TexturePtr DXContext::CreateTexture(const char *name, int width, int height, Pix
 	// copy texture data
 	for (int y = 0; y < height; y++)
 	{
-		const void *src = data + width * y;
+		const void *src = ((const uint32_t *)data) + width * y;
 		void *dest = ((char *)r.pBits) + y * r.Pitch;
 		memcpy(dest, src, width * sizeof(uint32_t));
 	}
@@ -1559,72 +1561,6 @@ TexturePtr DXContext::CreateTexture(const char *name, int width, int height, Pix
 	return dxtexture;
 }
 
-static std::string FixPath(std::string path)
-{
-    for (size_t i = 0; i < path.size(); i++)
-    {
-        if (path[i] == '/')
-            path[i] = '\\';
-    }
-    return path;
-}
-
-
-TexturePtr DXContext::CreateTextureFromFile(const char *name, const char *path)
-{
-	for (size_t i = 0; i < m_searchPaths.size(); i++)
-	{
-		for (size_t j = 0; j < m_textureExtensions.size(); j++)
-		{
-			std::string fullPath;
-			fullPath = m_searchPaths[i];
-			fullPath += path;
-			fullPath += m_textureExtensions[j];
-
-            fullPath = FixPath(fullPath);
-
-			if (FileExists(fullPath.c_str()))
-			{
-				IDirect3DTexture9 *texture = NULL;
-#if 0
-                D3DXIMAGE_INFO desc;
-                HRESULT hr = D3DXCreateTextureFromFileExA(
-					m_device,
-					fullPath.c_str(),
-					D3DX_DEFAULT, // w
-					D3DX_DEFAULT, // h
-					D3DX_DEFAULT,        // # mip levels to gen - all
-					 0,                    // usage flags
-					D3DFMT_UNKNOWN,
-					D3DPOOL_MANAGED,
-					D3DX_DEFAULT,     //filter
-					D3DX_DEFAULT,     //mipfilter
-					0,                // color key
-					&desc,
-					NULL,             //palette
-					&texture
-					);
-#else 
-                HRESULT hr = D3DXCreateTextureFromFileA(
-                    m_device,
-                    fullPath.c_str(),                
-                    &texture
-                );
-#endif
-				if (hr != D3D_OK)
-				{
- 					LogError("Could not load texture from file %s\n", fullPath.c_str());
-					return NULL;
-				}
-                auto dxtexture = std::make_shared<DXTexture>(name, texture);
-				return dxtexture;
-			}
-		}
-	}
-
-	LogError("Could not find texture %s\n", path);
-	return NULL;
-}
 
 } // d3d9
 

@@ -1,6 +1,7 @@
 
 
-#include "VizController.h"
+#include "IAudioSource.h"
+#include "platform.h"
 
 class NullAudioSource : public IAudioSource
 {

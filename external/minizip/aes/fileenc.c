@@ -67,7 +67,7 @@ static void encr_data(unsigned char data[], unsigned long d_len, fcrypt_ctx cx[1
         data[i++] ^= cx->encr_bfr[pos++];
     }
 
-    cx->encr_pos = pos;
+    cx->encr_pos = (int)pos;
 }
 
 int fcrypt_init(

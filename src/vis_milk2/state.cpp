@@ -1054,10 +1054,7 @@ void CState::Default()
 {
 	// DON'T FORGET TO ADD NEW VARIABLES TO BLEND FUNCTION, IMPORT, and EXPORT AS WELL!!!!!!!!
 
-    {
-		m_desc.clear();
-        m_path.clear();
-    }
+    m_name.clear();
 
     m_nMinPSVersion   = 0;     
     m_nMaxPSVersion   = 0;     
@@ -1808,7 +1805,7 @@ bool CState::ImportFromText(std::string text, std::string name, std::string &err
     // apply defaults for the stuff we will overwrite.
     Default();//RandomizePresetVars();
 
-    m_desc = name;
+    m_name = name;
 
 	PresetReader pr;
     pr.Parse(text);
@@ -1976,7 +1973,7 @@ bool CState::RecompileShaders(std::string &errors)
     // compile shader code
     if (!m_shader_warp && m_nWarpPSVersion > 0 && !m_szWarpShadersText.empty())
     {
-        m_shader_warp = m_plugin->RecompileShader(m_desc + "_warp", m_plugin->m_szDefaultWarpVShaderText, m_szWarpShadersText, SHADER_WARP, errors);
+        m_shader_warp = m_plugin->RecompileShader(m_name + "_warp", m_plugin->m_szDefaultWarpVShaderText, m_szWarpShadersText, SHADER_WARP, errors);
         if (!m_shader_warp)
         {
             return false;
@@ -1985,7 +1982,7 @@ bool CState::RecompileShaders(std::string &errors)
 
     if (!m_shader_comp && m_nCompPSVersion > 0 && !m_szCompShadersText.empty())
     {
-        m_shader_comp =m_plugin->RecompileShader(m_desc + "_comp",  m_plugin->m_szDefaultCompVShaderText, m_szCompShadersText,SHADER_COMP, errors);
+        m_shader_comp =m_plugin->RecompileShader(m_name + "_comp",  m_plugin->m_szDefaultCompVShaderText, m_szCompShadersText,SHADER_COMP, errors);
         if (!m_shader_comp)
         {
             return false;

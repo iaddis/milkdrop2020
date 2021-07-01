@@ -1,7 +1,8 @@
 
 
-#include "VizController.h"
 
+#include "IAudioSource.h"
+#include "platform.h"
 
 struct wav_format {
     uint16_t audio_format; // Should be 1 for PCM. 3 for IEEE Float
@@ -76,7 +77,7 @@ public:
     
     void ReadBytes(uint8_t *dest, size_t count)
     {
-        for (int i=0; i < count; i++)
+        for (size_t i=0; i < count; i++)
         {
             dest[i] = ReadByte();
         }

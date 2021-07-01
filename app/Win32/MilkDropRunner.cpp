@@ -29,7 +29,7 @@
 
 #include "VizController.h"
 #include "../external/imgui/imgui.h"
-#include "../external/imgui/imgui_impl_win32.h"
+#include "../external/imgui/backends/imgui_impl_win32.h"
 
 #include "imgui_support.h"
 
@@ -205,14 +205,16 @@ LRESULT DXWindow::WindowProc(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lPa
 		bool down = (uMsg == WM_KEYDOWN);
 		int modifiers = HIWORD(lParam);
 
-		KeyEvent e;
-		e.c = (char)wParam;
-		e.code =  ConvertKeyCode_Win32((int)wParam );
+		ImGuiIO& io = ImGui::GetIO();
 
-		e.KeyCtrl = (::GetKeyState(VK_CONTROL) & 0x8000) != 0;
-		e.KeyShift = (::GetKeyState(VK_SHIFT) & 0x8000) != 0;
-		e.KeyAlt = (::GetKeyState(VK_MENU) & 0x8000) != 0;
-		e.KeyCommand = (::GetKeyState(VK_LWIN) & 0x8000) != 0;
+		//e.c = (char)wParam;
+		auto code =  ConvertKeyCode_Win32((int)wParam );
+
+		io.KeysDown[code] = down;
+		io.KeyCtrl = (::GetKeyState(VK_CONTROL) & 0x8000) != 0;
+		io.KeyShift = (::GetKeyState(VK_SHIFT) & 0x8000) != 0;
+		io.KeyAlt = (::GetKeyState(VK_MENU) & 0x8000) != 0;
+		//io.Key = (::GetKeyState(VK_LWIN) & 0x8000) != 0;
 
 /*
 		e.KeyCtrl = modifiers & MOD_CONTROL;
@@ -221,15 +223,8 @@ LRESULT DXWindow::WindowProc(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lPa
 		e.KeyShift = modifiers & MOD_SHIFT;
 		*/
 
-		ImGuiIO& io = ImGui::GetIO();
+		
 
-		if (m_controller)
-		{
-			if (down)
-				m_controller->OnKeyDown(e);
-			else 
-				m_controller->OnKeyUp(e);
-		}
 		break;
 	}
 
@@ -296,11 +291,11 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 
 #if DEBUG
 	//_CrtSetDbgFlag(_CRTDBG_CHECK_ALWAYS_DF | _CRTDBG_LEAK_CHECK_DF);
-	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_CHECK_EVERY_128_DF | _CRTDBG_LEAK_CHECK_DF);
+	//_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_CHECK_EVERY_128_DF | _CRTDBG_LEAK_CHECK_DF);
 //	_CrtSetBreakAlloc(8488);
 #endif
 
-	::SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+//	::SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
 	RedirectIOToConsole();
 
 	// create app window
@@ -313,7 +308,7 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 
 	ContextPtr context;
 
-#if 0
+#if 1
 	context = render::d3d9::D3D9CreateContext(hwnd);
 #else
 	context = render::d3d11::D3D11CreateContext(hwnd);

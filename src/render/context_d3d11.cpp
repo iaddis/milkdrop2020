@@ -292,6 +292,7 @@ namespace render {
 			virtual float GetTexelOffset() override { return 0.0f; }
 			virtual const std::string& GetDriver()  override { return m_driver; };
 			virtual const std::string& GetDesc() override { return m_description; };
+			virtual const std::string& GetShadingLanguage() override { return m_shadingLanguageVersion; };
 
 
 			virtual bool IsSupported(PixelFormat format) override
@@ -299,7 +300,6 @@ namespace render {
 				return true;
 			}
 
-			virtual TexturePtr CreateTextureFromFile(const char* name, const char* path)  override;
 			virtual TexturePtr CreateRenderTarget(const char* name, int width, int height, PixelFormat format)  override;
 			virtual TexturePtr CreateTexture(const char* name, int width, int height, PixelFormat format, const void* data)  override;
 			virtual ShaderPtr CreateShader(const char* name)  override;
@@ -546,6 +546,8 @@ namespace render {
 			//private:
 			std::string m_driver;
 			std::string m_description;
+			std::string m_shadingLanguageVersion = "HLSL";
+
 
 			Matrix44 m_xform;
 
@@ -1491,29 +1493,6 @@ namespace render {
 		}
 
 
-		TexturePtr DXContext::CreateTextureFromFile(const char* name, const char* path)
-		{
-			//D3DX11_IMAGE_LOAD_INFO loadInfo;
-			ID3D11Resource* pResource;
-			HRESULT hr = D3DX11CreateTextureFromFile(
-				mD3DDevice, path, NULL, NULL, &pResource, NULL);
-			if (FAILED(hr))
-			{
-				return NULL;
-			}
-
-			// query texture from resource
-			ID3D11Texture2D* pD3DTexture = NULL;
-			pResource->QueryInterface(__uuidof(ID3D11Texture2D), (LPVOID*)&pD3DTexture);
-			pResource->Release();
-			if (pD3DTexture == NULL)
-			{
-				return NULL;
-			}
-
-			return std::make_shared<DXTexture>(this, name, pD3DTexture);
-		}
-
 		TexturePtr DXContext::CreateRenderTarget(const char* name, int width, int height, PixelFormat format)
 		{
 			D3D11_TEXTURE2D_DESC desc = { 0 };
@@ -1539,7 +1518,7 @@ namespace render {
 			return std::make_shared<DXTexture>(this, name, pD3DTexture);
 
 		}
-		TexturePtr DXContext::CreateTexture(const char* name, int width, int height, PixelFormat format, const uint32_t* data)
+		TexturePtr DXContext::CreateTexture(const char* name, int width, int height, PixelFormat format, const void* data)
 		{
 			D3D11_TEXTURE2D_DESC desc = { 0 };
 			desc.Width = width;

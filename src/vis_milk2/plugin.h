@@ -242,7 +242,7 @@ public:
     
         virtual const std::string &GetPresetName() override
         {
-            return m_pState->GetDescription();
+            return m_pState->GetName();
         }
     
     
@@ -284,7 +284,7 @@ public:
     
 
      
-        virtual PresetPtr        LoadPresetFromFile(std::string &text, std::string path, std::string name, std::string &errors)  override;
+        virtual PresetPtr   LoadPreset(const std::string &text, std::string name, std::string &errors)  override;
         virtual void		SetPreset(PresetPtr preset, PresetLoadArgs args) override;
         virtual void        LoadEmptyPreset();
      

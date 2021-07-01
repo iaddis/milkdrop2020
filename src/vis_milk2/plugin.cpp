@@ -2600,21 +2600,10 @@ void CPlugin::GenPlasma(int x0, int x1, int y0, int y1, float dt)
 }
 
 
-PresetPtr CPlugin::LoadPresetFromFile(std::string &presetText, std::string path, std::string name, std::string &errors)
+PresetPtr CPlugin::LoadPreset(const std::string &text, std::string name, std::string &errors)
 {
     PROFILE_FUNCTION_CAT("load")
     StopWatch sw;
-    
-    std::string text = presetText;
-    if (text.empty())
-    {
-        if (!FileReadAllText(path, text))
-        {
-            errors = StringFormat("ERROR loading preset: '%s'", path.c_str());
-            return nullptr;
-        }
-    }
-    
     
 //    LogPrint("LoadingPreset: '%s' (%fms)\n", name.c_str(), sw.GetElapsedMilliSeconds() );
     
@@ -2624,7 +2613,6 @@ PresetPtr CPlugin::LoadPresetFromFile(std::string &presetText, std::string path,
         return nullptr;
     }
     
-    state->m_path = path;
     state->time_import = sw.GetElapsedMilliSeconds();
     
 //    LogPrint("LoadPreset: '%s' (%fms)\n", state->m_desc.c_str(), sw.GetElapsedMilliSeconds() );
@@ -2691,7 +2679,7 @@ void CPlugin::SetPreset(CStatePtr preset, PresetLoadArgs args)
 	//LogPrint("LoadPreset %s\n", loaded->m_desc.c_str());
 
     // if no preset was valid before, make sure there is no blend, because there is nothing valid to blend from.
-    if (m_pState->m_desc.empty())
+    if (m_pState->m_name.empty())
         args.blendTime = 0;
 
     // set as current state, keep old state

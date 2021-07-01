@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <string>
 #include <vector>
-
+#include <memory>
 
 namespace Archive
 {

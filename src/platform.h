@@ -84,8 +84,8 @@
 
 
 
-std::string StringFormatV(const char *format, va_list arglist);
-std::string StringFormat(const char *format, ...);
+std::string StringFormatV(const char *format, va_list arglist) PLATFORM_FMTLIST(1);
+std::string StringFormat(const char *format, ...) PLATFORM_FMTARGS(1);
 
 void StringFormatV(std::string *pstr, const char *format, va_list arglist);
 void StringFormat(std::string *pstr, const char *format, ...);

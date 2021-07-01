@@ -196,7 +196,7 @@ static void ImGui_ImplRender_CreateFontsTexture(render::ContextPtr context)
     io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
     
     auto fmt = context->IsSupported(PixelFormat::BGRA8Unorm) ? PixelFormat::BGRA8Unorm : PixelFormat::RGBA8Unorm;
-    g_FontTexture = context->CreateTexture("imgui_font", width, height, fmt, (const uint32_t *)pixels);
+    g_FontTexture = context->CreateTexture("imgui_font", width, height, fmt, pixels);
     
     // Store our identifier
     io.Fonts->TexID = g_FontTexture.get();

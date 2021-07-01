@@ -860,6 +860,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos";
 			};
 			name = Debug;
@@ -878,6 +879,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos";
 			};
 			name = Release;
@@ -895,6 +897,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = appletvos;
+				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "appletvsimulator appletvos";
 				TVOS_DEPLOYMENT_TARGET = 12.0;
 			};
@@ -912,6 +915,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = appletvos;
+				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "appletvsimulator appletvos";
 				TVOS_DEPLOYMENT_TARGET = 12.0;
 			};
@@ -951,6 +955,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				PRODUCT_NAME = hlsl2glsl;
 				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
 			};
 			name = Debug;
 		};
@@ -967,6 +972,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				PRODUCT_NAME = hlsl2glsl;
 				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
 			};
 			name = Release;
 		};

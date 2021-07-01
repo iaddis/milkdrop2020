@@ -1,7 +1,8 @@
 
 
 #if 1
-#include "VizController.h"
+#include "IAudioSource.h"
+#include "platform.h"
 
 #if defined(EMSCRIPTEN)
 #include <AL/al.h>

@@ -5,6 +5,16 @@
 // This is the only file that should be including windows.h 
 #define WIN32_LEAN_AND_MEAN           
 #include <windows.h>
+#include <sys/stat.h>
+#if !defined(S_ISREG) && defined(S_IFMT) && defined(S_IFREG)
+#define S_ISREG(m) (((m) & S_IFMT) == S_IFREG)
+#endif
+
+
+#if !defined(S_ISDIR) && defined(S_IFMT) && defined(S_IFDIR)
+#define S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
+#endif
+
 #endif
 
 #ifdef __APPLE__
@@ -18,6 +28,7 @@
 #include <mach/kern_return.h>  // for kern_return_t
 #include <mach/task_info.h>
 #include <sys/sysctl.h>
+#include "../app/CommonApple/CommonApple.h"
 #endif
 
 #ifdef EMSCRIPTEN
@@ -683,7 +694,17 @@ std::string PlatformGetTimeString()
 
 const char *PlatformGetAppVersion()
 {
-    return "1.2.0";
+#if __APPLE__
+    static std::string str;
+    if (str.empty()) {
+        str = AppGetShortVersionString();
+        str += '@';
+        str += AppGetBuildVersionString();
+    }
+    return str.c_str();
+#else
+    return "1.3.0";
+#endif
 }
 
 
@@ -735,16 +756,16 @@ const char *PlatformGetDeviceModel()
 {
 #if __APPLE__
 
-    static const char *_model;
-    if (!_model)
+    static std::string str;
+    if (str.empty())
     {
-        _model = GetSysCtlString(
+        str = GetSysCtlString(
                                  // "hw.machine"
                                  "hw.model"
                                  
                                  );
     }
-    return _model;
+    return str.c_str();
 #elif EMSCRIPTEN
     static const char *_agent;
     if (!_agent)
@@ -766,14 +787,14 @@ const char *PlatformGetDeviceArch()
 {
 #if __APPLE__
 
-    static const char *_model;
-    if (!_model)
+    static std::string str;
+    if (str.empty())
     {
-        _model = GetSysCtlString(
+        str = GetSysCtlString(
                                  "hw.machine"
                                  );
     }
-    return _model;
+    return str.c_str();
     
 #elif EMSCRIPTEN
     return "WebAssembly";

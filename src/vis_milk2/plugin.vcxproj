@@ -298,16 +298,52 @@
   <ItemGroup>
     <ClCompile Include="..\..\app\Win32\keycode_win32.cpp" />
     <ClCompile Include="..\..\app\Win32\MilkDropRunner.cpp" />
+    <ClCompile Include="..\..\external\imgui\backends\imgui_impl_win32.cpp" />
     <ClCompile Include="..\..\external\imgui\imgui.cpp" />
     <ClCompile Include="..\..\external\imgui\imgui_demo.cpp" />
     <ClCompile Include="..\..\external\imgui\imgui_draw.cpp" />
-    <ClCompile Include="..\..\external\imgui\imgui_impl_win32.cpp" />
+    <ClCompile Include="..\..\external\imgui\imgui_tables.cpp" />
     <ClCompile Include="..\..\external\imgui\imgui_widgets.cpp" />
-    <ClCompile Include="..\..\generated\generated-code.cpp" />
+    <ClCompile Include="..\..\external\lzma1801\C\7zAlloc.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\7zArcIn.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\7zBuf.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\7zBuf2.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\7zCrc.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\7zCrcOpt.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\7zDec.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\7zFile.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\7zStream.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\Aes.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\AesOpt.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\Alloc.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\Bcj2.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\Bcj2Enc.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\Bra.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\Bra86.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\BraIA64.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\CpuArch.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\Delta.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\DllSecur.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\LzFind.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\Lzma2Dec.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\Lzma86Dec.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\LzmaDec.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\LzmaLib.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\Ppmd7.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\Ppmd7Dec.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\Ppmd7Enc.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\Sha256.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\Sort.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\Xz.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\XzCrc64.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\XzCrc64Opt.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\XzDec.c" />
+    <ClCompile Include="..\..\external\lzma1801\C\XzIn.c" />
+    <ClCompile Include="..\ArchiveReader.cpp" />
     <ClCompile Include="..\audio\NullAudioSource.cpp" />
-    <ClCompile Include="..\audio\RawFileAudioSource.cpp" />
     <ClCompile Include="..\audio\WaveInAudioSource.cpp" />
     <ClCompile Include="..\audio\WavFileAudioSource.cpp" />
+    <ClCompile Include="..\ImageReader.cpp" />
     <ClCompile Include="..\ImageWriter.cpp" />
     <ClCompile Include="..\imgui_support.cpp" />
     <ClCompile Include="..\matrix.cpp" />
@@ -324,13 +360,11 @@
     <ClCompile Include="..\script\mdp-eel2\script-eval.cpp" />
     <ClCompile Include="..\script\mdp-eel2\script-expression.cpp" />
     <ClCompile Include="..\script\mdp-eel2\script-functype.cpp" />
-    <ClCompile Include="..\script\mdp-eel2\script-kernel-generated.cpp" />
     <ClCompile Include="..\script\mdp-eel2\script-kernel.cpp" />
     <ClCompile Include="..\script\mdp-eel2\script-lextab.cpp" />
     <ClCompile Include="..\script\mdp-eel2\script-preprocessor.cpp" />
     <ClCompile Include="..\script\mdp-eel2\script-yylex.cpp" />
     <ClCompile Include="..\TProfiler.cpp" />
-    <ClCompile Include="..\UnitTests.cpp" />
     <ClCompile Include="..\VizController.cpp" />
     <ClCompile Include="AudioAnalyzer.cpp" />
     <ClCompile Include="fft.cpp" />
@@ -357,23 +391,58 @@
     <ClInclude Include="..\..\app\Win32\keycode_win32.h" />
     <ClInclude Include="..\..\app\Win32\MilkDropRunner.h" />
     <ClInclude Include="..\..\app\Win32\Resource.h" />
+    <ClInclude Include="..\..\external\imgui\backends\imgui_impl_win32.h" />
     <ClInclude Include="..\..\external\imgui\imconfig.h" />
     <ClInclude Include="..\..\external\imgui\imgui.h" />
-    <ClInclude Include="..\..\external\imgui\imgui_impl_win32.h" />
     <ClInclude Include="..\..\external\imgui\imgui_internal.h" />
     <ClInclude Include="..\..\external\imgui\imstb_rectpack.h" />
     <ClInclude Include="..\..\external\imgui\imstb_textedit.h" />
     <ClInclude Include="..\..\external\imgui\imstb_truetype.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\7z.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\7zAlloc.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\7zBuf.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\7zCrc.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\7zFile.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\7zTypes.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\7zVersion.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\Aes.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\Alloc.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\Bcj2.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\Bra.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\Compiler.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\CpuArch.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\Delta.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\DllSecur.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\LzFind.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\LzFindMt.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\LzHash.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\Lzma2Dec.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\Lzma86.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\LzmaDec.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\LzmaLib.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\Ppmd.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\Ppmd7.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\Precomp.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\RotateDefs.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\Sha256.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\Sort.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\Xz.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\XzCrc64.h" />
+    <ClInclude Include="..\..\external\lzma1801\C\XzEnc.h" />
+    <ClInclude Include="..\ArchiveReader.h" />
     <ClInclude Include="..\audio\IAudioSource.h" />
     <ClInclude Include="..\AutoRef.h" />
     <ClInclude Include="..\common.h" />
+    <ClInclude Include="..\ImageReader.h" />
     <ClInclude Include="..\ImageWriter.h" />
     <ClInclude Include="..\imgui_support.h" />
     <ClInclude Include="..\IVisualizer.h" />
+    <ClInclude Include="..\IVizController.h" />
     <ClInclude Include="..\json.h" />
     <ClInclude Include="..\matrix.h" />
     <ClInclude Include="..\path.h" />
     <ClInclude Include="..\platform.h" />
+    <ClInclude Include="..\PresetInfo.h" />
     <ClInclude Include="..\render\context.h" />
     <ClInclude Include="..\render\DrawBuffer.h" />
     <ClInclude Include="..\script\mdp-eel2\script-codegenerator.h" />
@@ -382,7 +451,6 @@
     <ClInclude Include="..\script\mdp-eel2\script-expression.h" />
     <ClInclude Include="..\script\mdp-eel2\script-functions.h" />
     <ClInclude Include="..\script\mdp-eel2\script-functype.h" />
-    <ClInclude Include="..\script\mdp-eel2\script-kernel-generated.h" />
     <ClInclude Include="..\script\mdp-eel2\script-kernel.h" />
     <ClInclude Include="..\script\mdp-eel2\script-lextab.h" />
     <ClInclude Include="..\script\mdp-eel2\script-preprocessor.h" />
@@ -390,7 +458,6 @@
     <ClInclude Include="..\script\script.h" />
     <ClInclude Include="..\StopWatch.h" />
     <ClInclude Include="..\TProfiler.h" />
-    <ClInclude Include="..\UnitTests.h" />
     <ClInclude Include="..\VizController.h" />
     <ClInclude Include="fft.h" />
     <ClInclude Include="IAudioAnalyzer.h" />
@@ -403,118 +470,10 @@
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\..\app\Win32\MilkDropRunner.rc" />
+    <ResourceCompile Include="..\..\external\lzma1801\C\7zVersion.rc" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="..\..\external\imgui\LICENSE.txt" />
-  </ItemGroup>
-  <ItemGroup>
-    <Text Include="..\..\assets\data\blur1.fx">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <FileType>Document</FileType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </Text>
-    <Text Include="..\..\assets\data\blur2.fx">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <FileType>Document</FileType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </Text>
-    <Text Include="..\..\assets\data\comp_ps.fx">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <FileType>Document</FileType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </Text>
-    <Text Include="..\..\assets\data\comp_vs.fx">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <FileType>Document</FileType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </Text>
-    <Text Include="..\..\assets\data\custom_shapes.fx">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <FileType>Document</FileType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </Text>
-    <Text Include="..\..\assets\data\custom_waves.fx">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <FileType>Document</FileType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </Text>
-    <Text Include="..\..\assets\data\fixed.fx">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <FileType>Document</FileType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </Text>
-    <Text Include="..\..\assets\data\hdr.fx">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <FileType>Document</FileType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </Text>
-    <Text Include="..\..\assets\data\imgui.fx">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <FileType>Document</FileType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </Text>
-    <Text Include="..\..\assets\data\include.fx">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <FileType>Document</FileType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </Text>
-    <Text Include="..\..\assets\data\output.fx">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <FileType>Document</FileType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </Text>
-    <Text Include="..\..\assets\data\warp_fixed.fx">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <FileType>Document</FileType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </Text>
-    <Text Include="..\..\assets\data\warp_ps.fx">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <FileType>Document</FileType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </Text>
-    <Text Include="..\..\assets\data\warp_vs.fx">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <FileType>Document</FileType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </Text>
-  </ItemGroup>
-  <ItemGroup>
-    <Text Include="..\..\assets\data\common.fxh">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <FileType>Document</FileType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </Text>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

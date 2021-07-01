@@ -13,10 +13,6 @@
 #include <chrono>
 #include <cstdio>
 
-#if !defined(EMSCRIPTEN)
-#include "../external/cpp-httplib/httplib.h"
-#endif
-
 using namespace render;
 
 IAudioSourcePtr OpenNullAudioSource();
@@ -25,150 +21,6 @@ IAudioSourcePtr OpenSLESAudioSource();
 IAudioSourcePtr OpenUDPAudioSource();
 IAudioSourcePtr OpenAVAudioEngineSource();
 
-
-#if !defined(EMSCRIPTEN)
-
-std::string dump_headers(const httplib::Headers &headers) {
-  std::string s;
-  for (auto header : headers) {
-      s += header.first;
-      s += ": ";
-      s += header.second;
-      s += '\n';
-  }
-
-  return s;
-}
-
-
-void VizController::TestServer()
-{
-    using namespace httplib;
-
-  Server svr;
-  if (!svr.is_valid()) {
-    return;
-  }
-    
-    std::string www_root = PathCombine(m_assetDir, "www");
-    
-    svr.set_base_dir(www_root.c_str());
-
-//    svr.Get("/hi", [](const Request &req, Response &res) {
-//      res.set_content("Hello World!\n", "text/plain");
-//    });
-
-    svr.Get("/api/headers", [](const Request &req, Response &res) {
-       res.set_content(dump_headers(req.headers), "text/plain");
-     });
-
-    
-    svr.Get("/api/status", [this](const Request &req, Response &res) {
-//          res.set_content(dump_headers(req.headers), "text/plain");
-        
-        m_dispatcher.Invoke([this, &res]() {
-            std::string content = m_currentPreset->Path;
-            res.set_content(content , "text/plain");
-        });
-    });
-    
-
-    svr.Get("/api/screenshot", [this](const Request &req, Response &res) {
-        m_dispatcher.Invoke([this, &res]() {
-            std::string path = GetScreenshotPath(m_currentPreset);
-            CaptureScreenshot(path);
-            std::vector<uint8_t> data;
-            if (FileReadAllBytes(path, data)) {
-                res.set_content((const char *)data.data(), data.size() , "image/png");
-            } else {
-                 res.set_content("Error capturing screenshot" , "text/plain");
-            }
-
-        });
-    });
-
-    svr.Get("/api/tests", [this](const Request &req, Response &res) {
-        m_dispatcher.Invoke([this, &res]() {
-
-            std::string str = this->TestingResultsToString();
-            
-            res.set_content(str, "application/json");
-
-        });
-    });
-
-    
-    svr.Get("/api/presets", [this](const Request &req, Response &res) {
-        m_dispatcher.Invoke([this, &res]() {
-            
-            JsonStringWriter writer;
-            writer.StartObject();
-            
-            writer.Key("presets");
-            writer.StartArray();
-            for (auto preset : m_presetList.List())
-            {
-                writer.Value(preset->Name);
-            }
-            writer.EndArray();
-            
-            writer.EndObject();
-            
-            
-            std::string str = writer.ToCString();
-            
-            res.set_content(str, "application/json");
-
-        });
-    });
-
-    
-    svr.Get("/api/control", [this](const Request &req, Response &res) {
-        m_dispatcher.Invoke([this, &req, &res]() {
-            
-            std::string action = req.get_param_value("action");
-            if (action == "next") {
-                NavigateNext();
-            } else if (action == "prev") {
-                NavigatePrevious();
-            } else if (action == "pause") {
-                TogglePause();
-            }
-            res.set_content(m_currentPreset->Name , "text/plain");
-        });
-        
-    });
-
-    
-    
-        svr.Get("/api/load", [this](const Request &req, Response &res) {
-            m_dispatcher.Invoke([this, &req, &res]() {
-                
-                std::string preset = req.get_param_value("name");
-                
-                if (SelectPreset(preset)) {
-                    res.set_content(m_currentPreset->Name , "text/plain");
-                } else {
-                    res.status = 404;
-                    res.set_content("Could not load preset", "text/plain");
-                }
-            });
-            
-        });
-
-    svr.Get("/api/profile", [](const Request &req, Response &res) {
-        
-        std::string json;
-        TProfiler::CaptureToJsonString(json);
-        res.set_content(json, "application/json");
-     });
-
-    
-
-    svr.listen("localhost", 19999);
-
-}
-#endif
 
 
 
@@ -242,7 +94,7 @@ public:
                         render::PixelFormatToString(_selectedTexture->GetFormat())
                         );
             
-            ImVec2 sz( _selectedTexture->GetWidth(), _selectedTexture->GetHeight());
+            ImVec2 sz((float)_selectedTexture->GetWidth(), (float)_selectedTexture->GetHeight());
             ImGui::Image( _selectedTexture.get(), sz);
         }
         ImGui::EndChild();
@@ -253,24 +105,20 @@ public:
 VizController::VizController(ContextPtr context, std::string assetDir, std::string userDir)
 	: m_context(context), m_assetDir(assetDir), m_userDir(userDir)
 {
-    
-#if !defined(EMSCRIPTEN) && 0
-    std::thread thread( [this]() { this->TestServer(); });
-    
-    thread.detach();
-#endif
-    
     // seed with random number
     std::random_device device;
     m_random_generator.seed( device() );
     
+    m_endpoint = "http://m1lkdr0p.com";
     
     m_navigateHistory = true;
     
     
     m_screenshotDir = PathCombine(m_userDir, "screenshots/");
     
-    m_settingsPath = PathCombine(m_userDir, "settings.json");
+    m_configPath = PathCombine(m_userDir, "config.json");
+    m_ratingsPath = PathCombine(m_userDir, "ratings.json");
+    m_historyPath = PathCombine(m_userDir, "history.json");
     
     m_audio_null = OpenNullAudioSource();
     m_audio_wavfile = m_audio_null;
@@ -309,6 +157,10 @@ VizController::~VizController()
 #if PLATFORM_SUPPORTS_THREADS
     if (m_screenshotFuture.valid()) {
         m_screenshotFuture.wait();
+    }
+    
+    if (m_presetBundleLoadFuture.valid()) {
+        m_presetBundleLoadFuture.wait();
     }
 #endif
     
@@ -368,10 +220,10 @@ bool VizController::LoadPreset(PresetInfoPtr presetInfo, PresetLoadArgs args)
 {
     
     std::string errors;
-    PresetPtr preset = m_vizualizer->LoadPresetFromFile(presetInfo->PresetText, presetInfo->Path, presetInfo->Name, errors);
+    PresetPtr preset = m_vizualizer->LoadPreset(presetInfo->PresetText, presetInfo->Name, errors);
     if (!preset)
     {
-        LogError("Could not load preset '%s'", presetInfo->Path.c_str());
+        LogError("Could not load preset '%s'", presetInfo->Name.c_str());
         LogError("%s", errors.c_str());
         return false;
     }
@@ -392,7 +244,7 @@ void VizController::LoadPresetAsync(PresetInfoPtr presetInfo, PresetLoadArgs arg
               [this, presetInfo, args]() {
 
                 std::string errors;
-                PresetPtr preset = m_vizualizer->LoadPresetFromFile(presetInfo->PresetText, presetInfo->Path, presetInfo->Name, errors);
+                PresetPtr preset = m_vizualizer->LoadPreset(presetInfo->PresetText, presetInfo->Name, errors);
                 if (preset)
                 {
                     m_dispatcher.InvokeAsync([=]() {
@@ -470,9 +322,6 @@ void VizController::SetPreset(PresetInfoPtr presetInfo, PresetPtr preset, Preset
              presetInfo->Name.c_str(),
              sw.GetElapsedMilliSeconds(),
              args.blendTime, args.duration );
-    
-    
-    SaveSettings();
 }
 
 
@@ -486,11 +335,11 @@ void VizController::TestAllPresets(std::function<void (std::string name, std::st
         
 //        LogPrint("%s\n", preset->PresetText.c_str());
         std::string error;
-        auto loaded = m_vizualizer->LoadPresetFromFile(preset->PresetText, preset->Path, preset->Name, error);
+        auto loaded = m_vizualizer->LoadPreset(preset->PresetText, preset->Name, error);
         if (!loaded) {
             if (callback)
             {
-                callback(preset->Path, error);
+                callback(preset->Name, error);
                 errorCount++;
             }
         }
@@ -502,188 +351,35 @@ void VizController::TestAllPresets(std::function<void (std::string name, std::st
     
 }
 
-PresetGroupPtr VizController::AddPresetGroup(std::string name)
+void VizController::UpdatePresetList()
 {
-    // group presets based on directory name
-    PresetGroupPtr pgroup;
-    auto it = m_presetGroupMap.find(name);
-    if (it == m_presetGroupMap.end())
+    // rebuild preset list...
+    m_presetList.clear();
+    m_presetLookup.clear();
+
+    for (auto bundle : m_presetBundles)
     {
-        // add new preset group
-        pgroup = std::make_shared<PresetGroup>();
-        pgroup->Name = name;
-        m_presetGroupMap[name] = pgroup;
-        m_presetGroups.push_back(pgroup);
-
-        if (!name.empty())
-        {
-            // resolve preset group
-            auto parent = AddPresetGroup( PathGetDirectory(name) );
-            pgroup->Parent = parent;
-            parent->ChildGroups.push_back(pgroup);
-        }
-    }
-    else
-    {
-        pgroup = it->second;
-    }
-    return pgroup;
-}
-
-void VizController::AddPreset(std::string path, std::string name, std::string presetText)
-{
-    auto preset = std::make_shared<PresetInfo>(path, name );
-    
-    // set preset text...
-    preset->PresetText = presetText;
-    
-    m_presetList.Add(preset);
-    m_presetLookup[preset->Name] = preset;
-    
-    std::string dirname = PathGetDirectory(preset->Name);
-    auto pgroup = AddPresetGroup(dirname);
-    
-    pgroup->Presets.push_back(preset);
-}
-
-
-void VizController::AddPresetsFromArchive(std::string archivePath)
-{
-    using namespace Archive;
-    
-    StopWatch sw;
-    
-    std::string archiveName = PathGetFileName(archivePath);
-    
-    int count = 0;
-    ArchiveReaderPtr ar = OpenArchive(archivePath);
-    if (!ar) {
-        return;
-    }
-    
-    ArchiveFileInfo fi;
-    while (ar->NextFile(fi))
-    {
-        const std::string &name = fi.name;
-    
-        if (name.empty()) continue;
-        if (fi.is_directory) continue;
+        if (!bundle->enabled) continue;
         
-        // directory?
-        if (name.back() == '/')
+        for (const auto &it : bundle->presets)
         {
-            continue;
-        }
-        
-        // hidden file?
-        if (name[0] == '.' || name.find("/.") != std::string::npos)
-        {
-            continue;
-        }
-        
-        std::string ext = PathGetExtensionLower(name);
-        if (ext == ".milk")
-        {
-            std::string text;
-            if (ar->ExtractText(text))
+            std::string path = it.first;
+            PresetInfoPtr preset = it.second;
+
+            if (m_presetLookup.find(preset->Name) == m_presetLookup.end())
             {
-                std::string path = archiveName + "/" + name;
-                AddPreset(path, PathRemoveExtension(name), text);
-                count++;
+                m_presetList.Add(preset);
+                m_presetLookup[preset->Name] = preset;
             }
-            continue;
         }
-        
-        if (name.find("textures/") != std::string::npos)
+
+        for (const auto &it : bundle->textures)
         {
-            // load a texture..
-            std::vector<uint8_t> data;
-            if (ar->ExtractBinary(data))
-            {
-                std::string texname = PathRemoveExtension(PathGetFileName(name));
-                auto texture = m_context->CreateTextureFromFileInMemory(texname.c_str(),
-                                                         data.data(),
-                                                         data.size()
-                                                         );
-                
-                if (texture)
-                {
-                    if (!m_texture_map->LookupTexture(texname))
-                    {
-                        m_texture_map->AddTexture(texname, texture);
-                    }
-                }
-            }
-
-            continue;
+            m_texture_map->AddTexture( it.first, it.second);
         }
-
-//        printf("%s\n", filename);
-        
-    };
-    
-     
-
-    LogPrint("Added presets from archive '%s' (presets:%d time:%fs)\n",
-             archiveName.c_str(),
-             count,
-             sw.GetElapsedSeconds());
-     
-}
-
-
-void VizController::AddPresetsFromDir(const char *presetdir, bool recurse)
-{
-	std::vector<std::string> files;
-	std::string dir = PathCombine(m_assetDir, presetdir);
-	DirectoryGetFiles(dir, files, true);
-
-    
-    
-	for (auto file : files)
-	{
-        std::string ext = PathGetExtensionLower(file);
-
-        if (ext == ".zip")
-        {
-            AddPresetsFromArchive(file);
-            continue;
-        }
-
-        if (ext == ".7z")
-        {
-            AddPresetsFromArchive(file);
-            continue;
-        }
-        
-		if (ext == ".milk")
-		{
-            std::string path = file;
-            std::string name = path.substr(dir.size());
-            name = PathRemoveLeadingSlash(name);
-            name = PathRemoveExtension(name);
-            
-            AddPreset(path, name, "");
-            continue;
-
-		}
-	}
-
+    }
     
     m_presetList.Sort();
-    
-    std::sort(m_presetGroups.begin(), m_presetGroups.end(),
-              [](const PresetGroupPtr &a, const PresetGroupPtr &b) -> bool{ return a->Name < b->Name; }
-          );
-
-    
-    for (auto group : m_presetGroups)
-    {
-        std::sort( group->Presets.begin(), group->Presets.end(),
-                  [](const PresetInfoPtr &a, const PresetInfoPtr &b) -> bool{ return a->SortKey < b->SortKey; }
-              );
-
-    }
     
     // set indices
     int index = 1;
@@ -693,8 +389,114 @@ void VizController::AddPresetsFromDir(const char *presetdir, bool recurse)
     }
     
     m_presetListFiltered = m_presetList;
-    m_navigateHistory = true;
+    
+    LoadRatings();
+    LoadHistory();
+    
+    
+    NavigateRandom();
 }
+
+void VizController::ProcessPresetLoad()
+{
+    // handle preset loading (async if possible..)
+    
+    if (m_presetBundleLoadFuture.valid())
+    {
+        if (m_presetBundleLoadFuture.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
+        {
+            m_presetBundleActiveLoad.clear();
+            
+            // get preset bundle
+            PresetBundlePtr bundle = m_presetBundleLoadFuture.get();
+            
+            
+            // create textures for all image data we have (if we couldn't do this async in another thread)
+            for (const auto &it : bundle->texture_image_data)
+            {
+                std::string name = it.first;
+                render::ImageDataPtr image = it.second;
+                auto texture = m_context->CreateTexture(name.c_str(), image->width, image->height, image->format, image->data);
+                if (texture)
+                {
+                    bundle->textures[ name ] = texture;
+                }
+            }
+            bundle->texture_image_data.clear();
+            
+            m_presetBundles.push_back(bundle);
+
+            LogPrint("Loaded preset bundle '%s' (presets:%d textures:%d time:%fs)\n",
+                     bundle->name.c_str(),
+                     (int)bundle->presets.size(),
+                     (int)bundle->textures.size(),
+                     bundle->loadTime);
+            
+            // clear future
+            m_presetBundleLoadFuture = std::future<PresetBundlePtr>();
+            
+            if (m_presetBundleLoadQueue.empty())
+            {
+                // update preset list after loading is complete....
+                UpdatePresetList();
+            }
+        }
+    }
+    else
+    {
+        if (!m_presetBundleLoadQueue.empty())
+        {
+            // dequeue next bundle...
+            std::string archivePath = m_presetBundleLoadQueue.front();
+            m_presetBundleLoadQueue.pop();
+            
+            m_presetBundleActiveLoad = archivePath;
+            
+            auto context = m_context;
+#if PLATFORM_SUPPORTS_THREADS
+            if (context->IsThreaded())
+            {
+                m_presetBundleLoadFuture = std::async( std::launch::async,
+                              [archivePath, context] {
+                                  PresetBundlePtr bundle = LoadPresetBundleFromArchive(archivePath, context);
+                                  return bundle;
+                              }
+                    );
+            }
+            else
+#endif
+            {
+                std::promise<PresetBundlePtr> promise;
+                m_presetBundleLoadFuture = promise.get_future();
+                
+                PresetBundlePtr bundle = LoadPresetBundleFromArchive(archivePath, context);
+                promise.set_value(bundle);
+            }
+
+        }
+
+    }
+}
+
+
+
+void VizController::LoadPresetBundlesFromDir(std::string dir)
+{
+	std::vector<std::string> files;
+	DirectoryGetFiles(dir, files, true);
+    
+	for (auto file : files)
+	{
+        std::string ext = PathGetExtensionLower(file);
+        if (ext == ".zip" || ext == ".7z")
+        {
+            // add to load queue....
+            m_presetBundleLoadQueue.push(file);
+        }
+	}
+}
+
+
 
 void VizController::TestingStart()
 {
@@ -818,17 +620,10 @@ void VizController::TestingAbort()
     LogPrint("Testing paused\n");
 }
 
-void VizController::OnDragDrop(std::string path)
-{
-    std::string name =  PathRemoveExtension( PathGetFileName(path) );
-    SelectPreset(name);
-}
-
 
 void VizController::OpenInputAudioFile(const char *path)
 {
     IAudioSourcePtr OpenWavFileAudioSource(const char *path);
-    IAudioSourcePtr OpenRawFileAudioSource(const char *path);
     
     std::string fullPath = PathCombine(m_assetDir, path);
 
@@ -839,15 +634,9 @@ void VizController::OpenInputAudioFile(const char *path)
     }
 
     std::string ext = PathGetExtensionLower(fullPath);
-    if (ext == ".raw")
+    if (ext == ".wav")
     {
-        IAudioSourcePtr source = OpenRawFileAudioSource(fullPath.c_str());
-        m_audio_wavfile = source;
-    }
-    else if (ext == ".wav")
-    {
-        IAudioSourcePtr source = OpenWavFileAudioSource(fullPath.c_str());
-        m_audio_wavfile = source;
+        m_audio_wavfile = OpenWavFileAudioSource(fullPath.c_str());
     }
     
     m_audioSource = m_audio_wavfile;
@@ -865,7 +654,22 @@ void VizController::SingleStep()
 void VizController::TogglePause()
 {
     m_paused = !m_paused;
-    LogPrint("Playback %s\n", m_paused ? "paused" : "resumed");
+}
+
+void VizController::Pause()
+{
+    m_paused = true;
+}
+
+void VizController::Play()
+{
+    m_paused = false;
+}
+
+float VizController::GetCurrentPresetRating() const
+{
+    if (!m_currentPreset) return 0;
+    return m_currentPreset->Rating;
 }
 
 void VizController::SetCurrentPresetRating(float rating)
@@ -875,7 +679,25 @@ void VizController::SetCurrentPresetRating(float rating)
         if (rating != m_currentPreset->Rating)
         {
             m_currentPreset->Rating = rating;
-            SaveSettings();
+
+            
+            if (!m_endpoint.empty())
+            {
+                // post a rating publicly
+                std::string url = m_endpoint + "/rating";
+                
+                rapidjson::StringBuffer str;
+                rapidjson::Writer<rapidjson::StringBuffer> writer(str);
+                writer.StartObject();
+                writer.Key(m_currentPreset->Name);
+                writer.Double(rating);
+                writer.EndObject();
+
+                HttpSend("POST", url, str.GetString(), str.GetSize(), false, "application/json", nullptr);
+            }
+            
+            
+            SaveRatings();
         }
         
         if (m_currentPreset->Rating < 0)
@@ -929,6 +751,7 @@ void VizController::NavigateRandom(bool blend)
         // add to preset history...
         m_presetHistory.Add(preset);
         m_presetHistory.SelectLast();
+        SaveHistory();
     }
     
 }
@@ -974,14 +797,14 @@ static bool ToolbarButton(const char *id, const char *tooltip)
     return result;
 }
 
-static bool ToolbarToggleButton(const char *id, bool toggle, const char *tooltip)
+static bool ToolbarToggleButton(const char *id_on, const char *id_off, bool toggle, const char *tooltip)
 {
     if (toggle)
           ImGui::PushStyleColor(ImGuiCol_Button,
                                        ImGui::GetColorU32(ImGuiCol_ButtonActive)
                                        );
 
-    bool result = ToolbarButton(id, tooltip);
+    bool result = ToolbarButton(toggle ? id_on : id_off, tooltip);
 
     if (toggle)
         ImGui::PopStyleColor(1);
@@ -1000,6 +823,38 @@ static void ToolbarSeparator(float width = 64)
 
 void VizController::DrawTitleWindow()
 {
+    if (!m_presetBundleActiveLoad.empty())
+    {
+        ImVec2 pos(20, ImGui::GetIO().DisplaySize.y / 2 );
+        ImVec2 margin(20, 20);
+        ImGui::SetNextWindowPos(pos, ImGuiCond_Always, ImVec2(0.0f, 0.0f));
+        ImGui::SetNextWindowSize (ImVec2(ImGui::GetIO().DisplaySize.x - pos.x - margin.x, 0) );
+//            ImGui::SetNextWindowContentSize (ImVec2(ImGui::GetIO().DisplaySize.x - 80, 0) );
+        if (ImGui::Begin("BundleLoadStatus", &m_showTitle, 0
+                         | ImGuiWindowFlags_NoMove
+                         | ImGuiWindowFlags_NoDecoration
+                         | ImGuiWindowFlags_NoTitleBar
+//                         | ImGuiWindowFlags_NoResize
+                         | ImGuiWindowFlags_NoScrollbar
+                         | ImGuiWindowFlags_AlwaysAutoResize
+                         | ImGuiWindowFlags_NoSavedSettings
+                         | ImGuiWindowFlags_NoFocusOnAppearing
+                         | ImGuiWindowFlags_NoNav
+                         ))
+        {
+            ImGui::TextWrapped("Loading preset bundle:\n"
+                               );
+
+            ImGui::TextWrapped("'%s'\n",
+                               m_presetBundleActiveLoad.c_str()
+                               );
+            
+        }
+        ImGui::End();
+        
+
+    }
+    
     #if 1
         {
             
@@ -1008,7 +863,7 @@ void VizController::DrawTitleWindow()
             ImGui::SetNextWindowPos(pos, ImGuiCond_Always, ImVec2(0.0f, 0.0f));
             ImGui::SetNextWindowSize (ImVec2(ImGui::GetIO().DisplaySize.x - pos.x - margin.x, 0) );
 //            ImGui::SetNextWindowContentSize (ImVec2(ImGui::GetIO().DisplaySize.x - 80, 0) );
-            if (ImGui::Begin("MilkdropStatus", &m_showUI, 0
+            if (ImGui::Begin("PresetTitle", &m_showTitle, 0
                              | ImGuiWindowFlags_NoMove
                              | ImGuiWindowFlags_NoDecoration
                              |  ImGuiWindowFlags_NoTitleBar
@@ -1043,6 +898,156 @@ void VizController::DrawTitleWindow()
 
 }
 
+void VizController::GetPresetTitle(std::string &title) const
+{
+    if (m_currentPreset)
+    {
+         StringFormat(&title,
+                        "(%d/%d) %s",
+                           m_currentPreset->Index,
+                           (int)m_presetList.size(),
+                           m_currentPreset->Name.c_str()
+                        );
+
+    } else
+    {
+        title.clear();
+    }
+
+}
+
+
+bool VizController::IsToolbarButtonVisible(UIToolbarButton button)
+{
+    switch (button)
+    {
+        case UIToolbarButton::NavigatePrevious:
+        case UIToolbarButton::NavigateNext:
+        case UIToolbarButton::NavigateShuffle:
+            return true;
+
+        case UIToolbarButton::SelectionLock:
+            return !GetSelectionLock();
+            
+        case UIToolbarButton::SelectionUnlock:
+            return GetSelectionLock();
+            
+        case UIToolbarButton::Pause:
+            return IsPlaying();
+
+        case UIToolbarButton::Play:
+            return !IsPlaying();
+
+        case UIToolbarButton::Step:
+            return true;
+            
+        case UIToolbarButton::MicrophoneOn:
+            return IsMicrophoneEnabled();
+            
+        case UIToolbarButton::MicrophoneOff:
+            return !IsMicrophoneEnabled();
+
+        case UIToolbarButton::SettingsShow:
+            return !GetSettingsVisible();
+
+        case UIToolbarButton::SettingsHide:
+            return GetSettingsVisible();
+
+        case UIToolbarButton::Blacklist:
+            return GetCurrentPresetRating() != -1.0f;
+
+        case UIToolbarButton::Unblacklist:
+            return GetCurrentPresetRating() == -1.0f;
+
+        case UIToolbarButton::Like:
+            return GetCurrentPresetRating() != 1.0f;
+            
+        case UIToolbarButton::Unlike:
+            return GetCurrentPresetRating() == 1.0f;
+
+            
+        default:
+            return true;
+
+    }
+}
+
+void VizController::OnToolbarButtonPressed(UIToolbarButton button)
+{
+    switch (button)
+    {
+        case UIToolbarButton::NavigatePrevious:
+            NavigatePrevious();
+            break;
+        case UIToolbarButton::NavigateNext:
+            NavigateNext();
+            break;
+            
+        case UIToolbarButton::NavigateShuffle:
+            NavigateRandom();
+            break;
+
+        case UIToolbarButton::SelectionLock:
+            SetSelectionLock(true);
+            break;
+            
+        case UIToolbarButton::SelectionUnlock:
+            SetSelectionLock(false);
+            break;
+            
+        case UIToolbarButton::Pause:
+            Pause();
+            break;
+
+        case UIToolbarButton::Play:
+            Play();
+            break;
+
+        case UIToolbarButton::Step:
+            SingleStep();
+            break;
+            
+        case UIToolbarButton::MicrophoneOn:
+            SetMicrophoneEnabled(false);
+            break;
+            
+        case UIToolbarButton::MicrophoneOff:
+            SetMicrophoneEnabled(true);
+            break;
+            
+        case UIToolbarButton::SettingsShow:
+            SetSettingsVisible(true);
+            break;
+
+        case UIToolbarButton::SettingsHide:
+            SetSettingsVisible(false);
+            break;
+
+        case UIToolbarButton::Blacklist:
+            SetCurrentPresetRating(-1.0f);
+            break;
+
+        case UIToolbarButton::Unblacklist:
+            SetCurrentPresetRating(0.0f);
+            break;
+
+        case UIToolbarButton::Like:
+            SetCurrentPresetRating(1.0f);
+            break;
+
+        case UIToolbarButton::Unlike:
+            SetCurrentPresetRating(0.0f);
+            break;
+
+
+            
+        default:
+            break;
+
+    }
+    
+
+}
 
 void VizController::DrawControlsWindow()
 {
@@ -1062,7 +1067,7 @@ void VizController::DrawControlsWindow()
         if (ImGui::Begin(
                          //m_currentPreset->Name.c_str(),
                          "MilkdropControls",
-                         &m_showUI, 0
+                         &m_showControls, 0
                          | ImGuiWindowFlags_NoMove
                          | ImGuiWindowFlags_NoDecoration
                          |  ImGuiWindowFlags_NoTitleBar
@@ -1086,10 +1091,9 @@ void VizController::DrawControlsWindow()
             
             ToolbarSeparator();
             
-            if (ToolbarButton(m_selectionLocked ? ICON_FA_LOCK : ICON_FA_UNLOCK,"Lock preset switching"))
+            if (ToolbarButton(GetSelectionLock() ? ICON_FA_LOCK : ICON_FA_UNLOCK,"Lock preset switching"))
             {
-                m_selectionLocked = !m_selectionLocked;
-                m_paused = false;
+                ToggleSelectionLock();
             }
             
 
@@ -1121,14 +1125,14 @@ void VizController::DrawControlsWindow()
 
             ToolbarSeparator();
             
-            float rating = m_currentPreset ? m_currentPreset->Rating : 0.0f;
+            float rating = GetCurrentPresetRating();
 
-            if (ToolbarToggleButton(ICON_FA_THUMBS_DOWN, rating == -1.0f,  "Blacklist preset"))
+            if (ToolbarToggleButton(ICON_FA_THUMBS_DOWN, ICON_FA_THUMBS_DOWN, rating == -1.0f,  "Blacklist preset"))
             {
                 SetCurrentPresetRating( rating == -1.0f ? 0.0f : -1.0f);
             }
 
-            if (ToolbarToggleButton(ICON_FA_THUMBS_UP, rating == 1.0f, "Like preset"))
+            if (ToolbarToggleButton(ICON_FA_HEART, ICON_FA_HEART_O, rating == 1.0f, "Like preset"))
             {
                 SetCurrentPresetRating( rating == 1.0f ? 0.0f : 1.0f);
             }
@@ -1162,7 +1166,7 @@ void VizController::DrawControlsWindow()
             ToolbarSeparator();
             
 
-            if (ToolbarToggleButton(ICON_FA_SIGN_IN, IsTesting(), "Toggle testing mode"))
+            if (ToolbarToggleButton(ICON_FA_SIGN_IN, ICON_FA_SIGN_IN, IsTesting(), "Toggle testing mode"))
             {
 
                 if (!IsTesting())
@@ -1190,15 +1194,11 @@ void VizController::DrawControlsWindow()
             
             {
                 ImGui::SameLine();
-                bool microphone = m_audioSource == m_audio_microphone;
+                bool microphone = IsMicrophoneEnabled();
                 if (ToolbarButton(microphone ? ICON_FA_MICROPHONE : ICON_FA_MICROPHONE_SLASH, "Enable microphone"))
                 {
-                    if (microphone) {
-                        m_audioSource = m_audio_wavfile;
-                    } else {
-                        m_audioSource = m_audio_microphone;
-                    }
-                    SaveSettings();
+                    ToggleMicrophone();
+                    SaveConfig();
                 }
             }
              
@@ -1261,12 +1261,10 @@ void VizController::DrawSettingsWindow()
     const char *appName = PlatformGetAppName();
     
     ImVec2 pos(20, 120);
-    ImVec2 margin(20, 20
+    ImVec2 margin(20, 80
                   );
+    
     ImGui::SetNextWindowPos(pos, ImGuiCond_Once, ImVec2(0.0f, 0.0f));
-//    ImGui::SetNextWindowContentSize (ImVec2(800, 0) );
-//    ImGui::SetNextWindowContentSize (ImVec2(ImGui::GetIO().DisplaySize.x - 80, ImGui::GetIO().DisplaySize.y - 180) );
-
     ImGui::SetNextWindowSize (ImVec2(ImGui::GetIO().DisplaySize.x - pos.x - margin.x, ImGui::GetIO().DisplaySize.y - pos.y - margin.y) );
 
     if (!ImGui::Begin(appName, &m_showSettings, 0
@@ -1376,14 +1374,73 @@ void VizController::DrawSettingsWindow()
 
 
 
+static void AppendNameValue(std::string &table, const char *name, const char *format, ...)
+{
+    char str[64 * 1024];
+    
+    va_list arglist;
+    va_start(arglist, format);
+    int count = vsnprintf(str, sizeof(str), format, arglist);
+    va_end(arglist);
+    (void)count;
+    str[sizeof(str) - 1] = '\0';
+
+    table += name;
+    table += '\t';
+    table += str;
+    table += '\n';
+}
+
+static void AppendSeparator(std::string &table)
+{
+    table += '\n';
+}
+
+
+
+void VizController::GetAboutInfo(std::string &info) const
+{
+    AppendNameValue(info, "Platform", "%s", PlatformGetPlatformName() );
+    AppendNameValue(info, "App Version", "%s", PlatformGetAppVersion() );
+    AppendNameValue(info, "Build Config", "%s",  PlatformGetBuildConfig() );
+    AppendNameValue(info, "Device Model", "%s", PlatformGetDeviceModel() );
+    AppendNameValue(info, "Architecture", "%s", PlatformGetDeviceArch() );
+    
+    AppendNameValue(info, "IMGUI Version", "%s", ImGui::GetVersion() );
+    
+    AppendSeparator(info);
+    
+    AppendNameValue(info, "Elapsed Time", "%.2fs",  m_time );
+    
+    AppendNameValue(info, "Presets Loaded", "%d", (int)m_presetHistory.size() );
+    AppendNameValue(info, "Presets Total", "%d", (int)m_presetList.size() );
+
+    PlatformMemoryStats memstats;
+    if (PlatformGetMemoryStats(memstats)) {
+        
+        AppendSeparator(info);
+        AppendNameValue(info, "Virtual Mem", "%.2fMB", (memstats.virtual_size_mb));
+        AppendNameValue(info, "Resident Mem", "%.2fMB", (memstats.resident_size_mb));
+        AppendNameValue(info, "Resident Max", "%.2fMB", (memstats.resident_size_max_mb));
+    }
+    
+    AppendSeparator(info);
+
+    AppendNameValue(info, "Frame Rate", "%3.2f", 1000.0f / m_frameTime );
+    AppendNameValue(info, "FrameTime", "%3.2fms", m_frameTime );
+    AppendNameValue(info, "RenderTime", "%3.2fms", m_renderTime );
+}
+
 void VizController::DrawPanel_About()
 {
     int table_flags =
     ImGuiTableFlags_BordersInnerV|
-    ImGuiTableFlags_SizingFixedFit
+    ImGuiTableFlags_SizingFixedFit|
+    ImGuiTableFlags_ScrollY
     ;
     
-    if (ImGui::BeginTable("##stats_columns", 2, table_flags))
+    ImVec2 sz = ImGui::GetContentRegionAvail();
+    if (ImGui::BeginTable("##stats_columns", 2, table_flags, sz))
     {
         //            ImGui::TableNextRow();
         ImGui::TableNextColumn();
@@ -1408,8 +1465,6 @@ void VizController::DrawPanel_About()
         if (PlatformGetMemoryStats(memstats)) {
             
             ImGui::Separator();
-            
-            //            TableSeparator();
             TableNameValue("Virtual Mem", "%.2fMB", (memstats.virtual_size_mb));
             TableNameValue("Resident Mem", "%.2fMB", (memstats.resident_size_mb));
             TableNameValue("Resident Max", "%.2fMB", (memstats.resident_size_max_mb));
@@ -1420,15 +1475,9 @@ void VizController::DrawPanel_About()
         TableNameValue("Frame Rate", "%3.2f", 1000.0f / m_frameTime );
         TableNameValue("FrameTime", "%3.2fms", m_frameTime );
         TableNameValue("RenderTime", "%3.2fms", m_renderTime );
-
         
         ImGui::Separator();
         
-        
-
-        
-        
-
         ImGui::EndTable();
     }
     
@@ -1438,9 +1487,14 @@ void VizController::DrawPanel_Video()
 {
     int table_flags =
     ImGuiTableFlags_BordersInnerV|
-    ImGuiTableFlags_SizingFixedFit
+    ImGuiTableFlags_SizingFixedFit|
+    ImGuiTableFlags_ScrollY
+
     ;
-    if (ImGui::BeginTable("##video_table", 2, table_flags))
+    
+    ImVec2 sz = ImGui::GetContentRegionAvail();
+
+    if (ImGui::BeginTable("##video_table", 2, table_flags, sz))
     {
 //                ImGui::TableSetColumnWidth(0, 240 );
 //                ImGui::TableSetColumnWidth(1, 800 );
@@ -1700,7 +1754,7 @@ void VizController::DrawPanel_History()
     if (ImGui::Button("Clear"))
     {
         m_presetHistory.clear();
-        SaveSettings();
+        SaveHistory();
     }
 
     int selected = DrawPresetTableUI( m_presetHistory, false, false);
@@ -1803,10 +1857,12 @@ void VizController::DrawPanel_Audio()
 {
     int table_flags =
     ImGuiTableFlags_BordersInnerV|
-    ImGuiTableFlags_SizingFixedFit
+    ImGuiTableFlags_SizingFixedFit|
+    ImGuiTableFlags_ScrollY
     ;
     
-    if (ImGui::BeginTable("##audio_table", 2, table_flags))
+    ImVec2 sz = ImGui::GetContentRegionAvail();
+    if (ImGui::BeginTable("##audio_table", 2, table_flags, sz))
     {
 //                ImGui::TableSetColumnWidth(0, 240 );
 //                ImGui::TableSetColumnWidth(1, 800 );
@@ -1825,7 +1881,7 @@ void VizController::DrawPanel_Audio()
             if (ImGui::RadioButton( source->GetDescription().c_str(), selected ))
             {
                 m_audioSource = source;
-                SaveSettings();
+                SaveConfig();
             }
         }
 
@@ -1837,7 +1893,7 @@ void VizController::DrawPanel_Audio()
         ImGui::Text("Gain");
         ImGui::TableNextColumn();
         if (ImGui::SliderFloat("", &m_audioGain, 0.0f, 8.0f)) {
-            SaveSettings();
+            SaveConfig();
         }
         ImGui::TableNextColumn();
 
@@ -1894,6 +1950,7 @@ void VizController::DrawPanel_Screenshots()
     
     ImGui::GetStyle().FramePadding = fp;
 }
+
 
 
 void VizController::DrawSettingsTabs()
@@ -2103,6 +2160,20 @@ void VizController::DrawDebugUI()
     
     PROFILE_FUNCTION_CAT("ui");
     
+    // clicking on nothing will toggle debug UI
+    if (ImGui::IsMouseClicked(0))
+    {
+        if (!m_showUI)
+        {
+            m_showUI = true;
+        }
+        else if (!ImGui::GetIO().WantCaptureMouse )
+        {
+            m_showUI = false;
+        }
+    }
+
+    
     if (!ImGui::IsAnyItemActive())
     {
         if (ImGui::IsKeyPressed( KEYCODE_L))
@@ -2140,27 +2211,20 @@ void VizController::DrawDebugUI()
             ToggleControlsMenu();
         }
     }
-
-    if (ImGui::IsMouseClicked(0))
-    {
-//        m_showSettings = true;
-        if (!m_showUI)
-        {
-            m_showUI = true;
-        }
-        else if (!ImGui::GetIO().WantCaptureMouse ) //if (!ImGui::IsAnyItemActive() && !ImGui::IsAnyItemHovered())
-        {
-            m_showUI = false;
-        }
-    }
-    
-
     
     if (m_showUI)
     {
-        DrawTitleWindow();
-        DrawControlsWindow();
-        
+
+        if (m_showControls)
+        {
+            if (m_showTitle)
+            {
+                DrawTitleWindow();
+            }
+
+            DrawControlsWindow();
+        }
+
 
         if (m_showSettings)
         {
@@ -2186,6 +2250,19 @@ void VizController::RenderFrame(float dt)
 {
     PROFILE_FUNCTION();
 
+    // measure time between frames
+    m_frameTime = m_frameTimer.GetElapsedMilliSeconds();
+    m_frameTimer.Restart();
+    
+    m_frameTimes.push_back(m_frameTime);
+    
+    if (m_frameTimeHistory.empty())
+        m_frameTimeHistory.resize(256);
+    
+    m_frameTimeHistory.push_back(m_frameTime);
+    m_frameTimeHistory.erase(m_frameTimeHistory.begin());
+
+    
     if (m_audio_microphone && m_audioSource != m_audio_microphone) {
         m_audio_microphone->StopCapture();
     }
@@ -2200,12 +2277,12 @@ void VizController::RenderFrame(float dt)
     Size2D size = m_context->GetDisplaySize();
     
     // clamp size of rendering to max output size, to cap performance
-    float maxSize = std::max(size.width, size.height);
+    int maxSize = std::max(size.width, size.height);
     if (m_maxOutputSize > 0 && maxSize > m_maxOutputSize)
     {
-        float scale = m_maxOutputSize / maxSize;
-        size.width  *= scale;
-        size.height *= scale;
+        float scale = m_maxOutputSize / (float)maxSize;
+        size.width  = (int)( (float)size.width  * scale);
+        size.height = (int)((float) size.height * scale);
     }
     
     
@@ -2257,71 +2334,6 @@ void VizController::RenderFrame(float dt)
 
 
 
-void VizController::RenderToScreenshot(PresetInfoPtr info, Size2D size, int frameCount)
-{
-    uint32_t seed = 0x12345678;
-    float duration = frameCount * m_deltaTime;
-    
-    PresetLoadArgs args = {0.0f, duration};
-    
-    m_audioSource =  m_audio_wavfile;
-    m_audioSource->Reset();
-//    m_audio->Reset();
-
-    m_vizualizer->SetRandomSeed(seed);
-    if (!LoadPreset(info, args))
-    {
-        // error
-        LogError("RenderToScreenshotError: '%s'\n", info->Name.c_str());
-        return;
-    }
-    
-    LogPrint("LoadPreset: '%s'\n", info->Name.c_str());
-
-    
-    for (int i=0; i < frameCount; i++)
-    {
-        m_vizualizer->Render(m_deltaTime, size, m_audioSource);
-        m_context->Flush();
-    }
-    
-    
-    std::string screenshotPath = PathCombine(m_screenshotDir, info->Name) + ".png";
-    CaptureScreenshot(screenshotPath);
-}
-
-
-ImageDataPtr VizController::RenderToImageBuffer(PresetInfoPtr info, Size2D size, int frameCount)
-{
-    uint32_t seed = 0x12345678;
-    float duration = frameCount * m_deltaTime;
-
-    
-    
-    PresetLoadArgs args = {0.0f, duration};
-    
-    m_audioSource =  m_audio_wavfile;
-    m_audioSource->Reset();
-//    m_audio->Reset();
-
-    m_vizualizer->SetRandomSeed(seed);
-    if (!LoadPreset(info, args))
-    {
-        LogError("ERROR: Could not load preset: %s\n", info->Path.c_str());
-        return nullptr;
-    }
-    
-    for (int i=0; i < frameCount; i++)
-    {
-//        printf("frame[%d]\n", i);
-        m_vizualizer->Render(m_deltaTime, size, m_audioSource);
-        m_context->Flush();
-    }
-    
-    auto texture = m_vizualizer->GetOutputTexture();
-    return nullptr; //m_context->GetImageData(texture);
-}
-
 
 void VizController::Render(int screenId, int screenCount, float dt)
 {
@@ -2329,28 +2341,13 @@ void VizController::Render(int screenId, int screenCount, float dt)
     
     m_dispatcher.Process();
     
+    ProcessPresetLoad();
+    
     m_deltaTime = dt;
     
     m_screens.resize(screenCount);
     m_screens[screenId] = m_context->GetDisplayInfo();
 
-    if (screenId == (screenCount - 1))
-    {
-        // measure time between frames
-        m_frameTime = m_frameTimer.GetElapsedMilliSeconds();
-        m_frameTimer.Restart();
-        
-        m_frameTimes.push_back(m_frameTime);
-        
-        if (m_frameTimeHistory.empty())
-            m_frameTimeHistory.resize(256);
-        
-        m_frameTimeHistory.push_back(m_frameTime);
-        m_frameTimeHistory.erase(m_frameTimeHistory.begin());
-    }
-    
-
-    
 
     // render visualizer to last screen
     if (screenId == (screenCount - 1))
@@ -2378,7 +2375,8 @@ void VizController::Render(int screenId, int screenCount, float dt)
         // display on screen
         m_context->SetRenderTarget(nullptr, "DrawVisualizer", LoadAction::Clear);
         m_context->SetBlendDisable();
-        m_vizualizer->Draw(m_contentMode, 1.0f);
+        if (m_currentPreset)
+            m_vizualizer->Draw(m_contentMode, 1.0f);
         
 
         m_renderTime = sw.GetElapsedMilliSeconds();
@@ -2392,18 +2390,12 @@ void VizController::Render(int screenId, int screenCount, float dt)
         // ImGui rendering to first screen
         
         ImGuiSupport_NewFrame();
+        
+        
         DrawDebugUI();
         m_context->SetRenderTarget(nullptr, "ImGui", (screenCount > 1) ? LoadAction::Clear : LoadAction::Load);
         ImGuiSupport_Render();
     }
-    
-
-//    DrawHDRTest();
-
-    
-
-    
-
 }
 
 void  VizController::ToggleSettingsMenu()
@@ -2419,57 +2411,49 @@ void  VizController::ToggleControlsMenu()
 }
 
 
-void VizController::LoadSettings()
+static bool LoadJsonFile(rapidjson::Document &doc, std::string path)
 {
     std::string text;
-    if (!FileReadAllText( m_settingsPath, text )) {
-        return;
+    if (!FileReadAllText( path, text )) {
+        return false;
     }
 
-    
-    // ...
-    
-    rapidjson::Document doc;
     doc.Parse(text);
-    if (doc.HasParseError())
+    if (doc.HasParseError() || !doc.IsObject())
     {
-        return;
+        return false;
     }
     
-    if (doc.HasMember("ratings"))
-    {
-        const auto &ratings = doc["ratings"].GetObject();
-        
-        for (const auto &member : ratings)
-        {
-            auto name = member.name.GetString();
-            auto it = m_presetLookup.find(name);
-            if (it != m_presetLookup.end())
-            {
-                it->second->Rating = member.value.GetFloat();
-            }
-        }
-    }
+    return true;
+}
 
-    if (doc.HasMember("history"))
+void VizController::LoadConfig()
+{
+    rapidjson::Document doc;
+    if (!LoadJsonFile(doc, m_configPath))
+        return;
+
+    if (doc.HasMember("audio"))
     {
-        const auto &history = doc["history"].GetArray();
-        
-        for (const auto &element : history)
+        const auto &audio = doc["audio"].GetObject();
+        if (audio.HasMember("source"))
         {
-            auto name = element.GetString();
-            auto it = m_presetLookup.find(name);
-            if (it != m_presetLookup.end())
-            {
-                m_presetHistory.Add(it->second);
-            }
+            std::string source = audio["source"].GetString();
+            if (source == "null") m_audioSource = m_audio_null; else
+            if (source == "microphone") m_audioSource = m_audio_microphone; else
+            if (source == "wavfile") m_audioSource = m_audio_wavfile;
+        }
+        
+        if (audio.HasMember("gain"))
+        {
+            m_audioGain = audio["gain"].GetFloat();
         }
     }
 
 }
 
 
-void VizController::SaveSettings()
+void VizController::SaveConfig()
 {
     JsonStringWriter writer;
     writer.StartObject();
@@ -2501,7 +2485,43 @@ void VizController::SaveSettings()
 
         writer.EndObject();
     }
+    
+    writer.EndObject();
+    assert(writer.IsComplete());
+    writer.SaveToFile(m_configPath);
+}
 
+
+void VizController::LoadRatings()
+{
+    rapidjson::Document doc;
+    if (!LoadJsonFile(doc, m_ratingsPath))
+        return;
+
+    if (doc.HasMember("ratings"))
+    {
+        const auto &ratings = doc["ratings"].GetObject();
+        
+        for (const auto &member : ratings)
+        {
+            auto name = member.name.GetString();
+            auto it = m_presetLookup.find(name);
+            if (it != m_presetLookup.end())
+            {
+                it->second->Rating = member.value.GetFloat();
+            }
+        }
+    }
+
+}
+
+
+
+void VizController::SaveRatings()
+{
+    JsonStringWriter writer;
+    writer.StartObject();
+ 
     
     {
         writer.Key("ratings");
@@ -2516,10 +2536,47 @@ void VizController::SaveSettings()
         }
         writer.EndObject();
     }
-    
+    writer.EndObject();
+    assert(writer.IsComplete());
+    writer.SaveToFile(m_ratingsPath);
+
+}
+
+
+
+void VizController::LoadHistory()
+{
+    rapidjson::Document doc;
+    if (!LoadJsonFile(doc, m_historyPath))
+        return;
+
+    if (doc.HasMember("history"))
     {
-        writer.Key("history");
+        const auto &history = doc["history"].GetArray();
         
+        m_presetHistory.clear();
+        for (const auto &element : history)
+        {
+            auto name = element.GetString();
+            auto it = m_presetLookup.find(name);
+            if (it != m_presetLookup.end())
+            {
+                m_presetHistory.Add(it->second);
+            }
+        }
+        
+        m_presetHistory.SelectLast();
+    }
+
+}
+
+void VizController::SaveHistory()
+{
+    JsonStringWriter writer;
+    writer.StartObject();
+    
+    writer.Key("history");
+    {
         writer.StartArray();
         for (auto preset : m_presetHistory.List())
         {
@@ -2527,16 +2584,9 @@ void VizController::SaveSettings()
         }
         writer.EndArray();
     }
-    
-    
     writer.EndObject();
-    
-    
-    if (FileWriteAllText( m_settingsPath, writer.ToCString() )) {
-//        LogPrint("Settings saved to '%s'\n", m_settingsPath.c_str());
-    }
-
-    
+    assert(writer.IsComplete());
+    writer.SaveToFile(m_historyPath);
 }
 
 
@@ -2549,7 +2599,14 @@ VizControllerPtr CreateVizController(ContextPtr context, std::string assetDir, s
     TProfiler::AddCaptureLocation(userDir);
 
     auto vizController = std::make_shared<VizController>(context, assetDir, userDir);
-    vizController->AddPresetsFromDir("presets", true);
+    
+
+    // add app supplied presets...
+    vizController->LoadPresetBundlesFromDir( PathCombine(assetDir, "presets") );
+    
+    // add user supplied presets...
+    vizController->LoadPresetBundlesFromDir( PathCombine(userDir, "presets") );
+    
     vizController->OpenInputAudioFile("audio/audio.wav");
 
 #if defined(__APPLE__)
@@ -2563,45 +2620,20 @@ VizControllerPtr CreateVizController(ContextPtr context, std::string assetDir, s
     vizController->SetMicrophoneAudioSource(OpenNullAudioSource());
 #endif
     
-    std::string firstPreset;
-//
-//    firstPreset = "Flexi - age of shading chaos";
-//    firstPreset = "Flexi - dawn has broken";
-    //firstPreset = "Flexi - kaleidoscope template [commented composite shader]";
-    
-     Config::TryGetString("PRESET", &firstPreset);
+    vizController->LoadConfig();
 
-     if (!firstPreset.empty())
-     {
-         vizController->SelectPreset(firstPreset);
-         vizController->SetSelectionLock(true);
-     }
-     else
-     {
-         vizController->SetSelectionLock(false);
-         vizController->NavigateRandom();
-     }
     
-    if (Config::GetBool("TESTMODE", false))
-    {
-      vizController->TestingStart();
-    }
-
     if (PlatformIsDebug())
     {
-      vizController->ToggleControlsMenu();
-//      vizController->ToggleSettingsMenu();
+        vizController->ToggleControlsMenu();
+        vizController->ShowDebugUI();
+    }
+    else
+    {
+        vizController->HideDebugUI();
     }
 
     
-#if  defined(OCULUS)
-    vizController->SetSelectionLock(false);
-    vizController->ToggleControlsMenu();
-    vizController->ToggleDebugMenu();
-  //  vizController->TestingStart();
-#endif
-    
-    vizController->LoadSettings();
     
     return vizController;
 }

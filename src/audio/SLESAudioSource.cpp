@@ -1,7 +1,8 @@
 
 
 #if defined(__ANDROID__) || defined(OCULUS) 
-#include "VizController.h"
+#include "IAudioSource.h"
+#include "platform.h"
 
 #include <SLES/OpenSLES.h>
 #include <SLES/OpenSLES_Android.h>
